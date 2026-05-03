@@ -19,6 +19,8 @@ const durationOptions = [
   { label: "Custom", value: -1 },
 ];
 
+type CreateMode = "AUTO" | "MANUAL";
+
 export default function CreateAuctionPage() {
   const router = useRouter();
   const { connected } = useWallet();
@@ -29,6 +31,7 @@ export default function CreateAuctionPage() {
   const [tokenMint, setTokenMint] = useState("");
   const [authorityTokenAccount, setAuthorityTokenAccount] = useState("");
   const [tokenName, setTokenName] = useState("TOKEN");
+  const [mode, setMode] = useState<CreateMode>("AUTO");
   const [totalSupply, setTotalSupply] = useState("1000000");
   const [minBidFloor, setMinBidFloor] = useState("0.5");
   const [duration, setDuration] = useState("3600");
@@ -37,6 +40,13 @@ export default function CreateAuctionPage() {
   const [loading, setLoading] = useState(false);
 
   const effectiveDuration = duration === "-1" ? Number(customDuration) : Number(duration);
+
+  const hasFormValues =
+    tokenMint.trim().length > 0 ||
+    authorityTokenAccount.trim().length > 0 ||
+    tokenName.trim() !== "TOKEN" ||
+    totalSupply.trim() !== "1000000" ||
+    minBidFloor.trim() !== "0.5";
 
   const preview = useMemo(
     () => ({
@@ -62,6 +72,22 @@ export default function CreateAuctionPage() {
     if (!Number.isFinite(effectiveDuration) || effectiveDuration <= 0) {
       throw new Error("Auction duration must be greater than zero");
     }
+  }
+
+  function switchMode(nextMode: CreateMode) {
+    if (mode === nextMode) return;
+    if (hasFormValues) {
+      const shouldSwitch = window.confirm("Switch modes? Your current inputs will be cleared.");
+      if (!shouldSwitch) return;
+    }
+    setMode(nextMode);
+    setTokenMint("");
+    setAuthorityTokenAccount("");
+    setTokenName("TOKEN");
+    setTotalSupply("1000000");
+    setMinBidFloor("0.5");
+    setDuration("3600");
+    setCustomDuration("7200");
   }
 
   function openConfirmation(event: FormEvent) {
@@ -117,6 +143,27 @@ export default function CreateAuctionPage() {
 
       <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_0.8fr]">
         <form className="surface space-y-4 p-5" onSubmit={openConfirmation}>
+          <div className="flex gap-2 rounded-[999px] border border-[#1e1e1e] bg-[#0d0d0d] p-1">
+            <button
+              type="button"
+              onClick={() => switchMode("AUTO")}
+              className={`flex-1 rounded-[999px] px-3 py-2 text-xs transition-soft ${
+                mode === "AUTO" ? "bg-[#c8892a] text-[#14110a]" : "text-[#6b6560] hover:text-[#f0ede8]"
+              }`}
+            >
+              Auto — Select from wallet
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode("MANUAL")}
+              className={`flex-1 rounded-[999px] px-3 py-2 text-xs transition-soft ${
+                mode === "MANUAL" ? "bg-[#c8892a] text-[#14110a]" : "text-[#6b6560] hover:text-[#f0ede8]"
+              }`}
+            >
+              Manual — Enter addresses
+            </button>
+          </div>
+
           <label className="block text-xs text-[#6b6560]">Token Name</label>
           <input className="input-dark text-sm" value={tokenName} onChange={(event) => setTokenName(event.target.value)} />
 
