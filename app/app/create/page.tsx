@@ -32,6 +32,10 @@ type TokenChoice = {
   name: string;
   imageUri: string | null;
 };
+type ValidationState = {
+  status: "idle" | "valid" | "invalid";
+  message: string;
+};
 
 export default function CreateAuctionPage() {
   const router = useRouter();
@@ -55,6 +59,8 @@ export default function CreateAuctionPage() {
   const [tokenMenuOpen, setTokenMenuOpen] = useState(false);
   const [selectedTokenMint, setSelectedTokenMint] = useState("");
   const [autoState, setAutoState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
+  const [mintValidation, setMintValidation] = useState<ValidationState>({ status: "idle", message: "" });
+  const [accountValidation, setAccountValidation] = useState<ValidationState>({ status: "idle", message: "" });
 
   const effectiveDuration = duration === "-1" ? Number(customDuration) : Number(duration);
 
@@ -144,6 +150,37 @@ export default function CreateAuctionPage() {
     }
   }
 
+  function isStrictSolanaAddress(value: string) {
+    return /^[1-9A-HJ-NP-Za-km-z]{44}$/.test(value);
+  }
+
+  async function validateMintField(value: string) {
+    const trimmed = value.trim();
+    if (!isStrictSolanaAddress(trimmed)) {
+      setMintValidation({ status: "invalid", message: "Invalid Solana address" });
+      return;
+    }
+    try {
+      const metaplex = Metaplex.make(connection);
+      const metadata = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(trimmed) });
+      const resolvedSymbol = metadata.symbol?.trim() || truncateAddress(trimmed, 4, 4);
+      const resolvedName = metadata.name?.trim() || resolvedSymbol;
+      setTokenName(resolvedSymbol);
+      setMintValidation({ status: "valid", message: `✓ Resolved: ${resolvedSymbol} (${resolvedName})` });
+    } catch {
+      setMintValidation({ status: "valid", message: `✓ Resolved: ${truncateAddress(trimmed, 4, 4)}` });
+    }
+  }
+
+  function validateAccountField(value: string) {
+    const trimmed = value.trim();
+    if (!isStrictSolanaAddress(trimmed)) {
+      setAccountValidation({ status: "invalid", message: "Invalid Solana address" });
+      return;
+    }
+    setAccountValidation({ status: "valid", message: "✓ Valid Solana address" });
+  }
+
   function validate() {
     if (!connected) throw new Error("Connect wallet to participate");
     new PublicKey(tokenMint);
@@ -176,6 +213,8 @@ export default function CreateAuctionPage() {
     setTokenChoices([]);
     setSelectedTokenMint("");
     setAutoState(nextMode === "AUTO" ? "idle" : "ready");
+    setMintValidation({ status: "idle", message: "" });
+    setAccountValidation({ status: "idle", message: "" });
   }
 
   function pickToken(choice: TokenChoice) {
@@ -358,9 +397,41 @@ export default function CreateAuctionPage() {
               <label className="block text-xs text-[#6b6560]">Token Name</label>
               <input className="input-dark text-sm" value={tokenName} onChange={(event) => setTokenName(event.target.value)} />
               <label className="block text-xs text-[#6b6560]">Token Mint Address</label>
-              <input className="input-dark text-sm" value={tokenMint} onChange={(event) => setTokenMint(event.target.value)} />
+              <input
+                className={`input-dark text-sm ${
+                  mintValidation.status === "invalid"
+                    ? "border-[#7a2a2a]"
+                    : mintValidation.status === "valid"
+                      ? "border-[#2a7a4a]"
+                      : ""
+                }`}
+                value={tokenMint}
+                onChange={(event) => setTokenMint(event.target.value)}
+                onBlur={() => validateMintField(tokenMint)}
+              />
+              {mintValidation.message ? (
+                <p className={`text-xs ${mintValidation.status === "invalid" ? "text-[#d49d9d]" : "text-[#88c49f]"}`}>
+                  {mintValidation.message}
+                </p>
+              ) : null}
               <label className="block text-xs text-[#6b6560]">Authority Token Account</label>
-              <input className="input-dark text-sm" value={authorityTokenAccount} onChange={(event) => setAuthorityTokenAccount(event.target.value)} />
+              <input
+                className={`input-dark text-sm ${
+                  accountValidation.status === "invalid"
+                    ? "border-[#7a2a2a]"
+                    : accountValidation.status === "valid"
+                      ? "border-[#2a7a4a]"
+                      : ""
+                }`}
+                value={authorityTokenAccount}
+                onChange={(event) => setAuthorityTokenAccount(event.target.value)}
+                onBlur={() => validateAccountField(authorityTokenAccount)}
+              />
+              {accountValidation.message ? (
+                <p className={`text-xs ${accountValidation.status === "invalid" ? "text-[#d49d9d]" : "text-[#88c49f]"}`}>
+                  {accountValidation.message}
+                </p>
+              ) : null}
             </section>
           )}
 
