@@ -30,7 +30,7 @@ const IDL: Idl = {
   instructions: [
     {
       name: "createAuction",
-      discriminator: [],
+      discriminator: [234, 6, 201, 246, 47, 219, 176, 107],
       accounts: [
         { name: "authority", writable: true, signer: true },
         { name: "auctionState", writable: true, signer: false },
@@ -50,7 +50,7 @@ const IDL: Idl = {
     },
     {
       name: "submitBid",
-      discriminator: [],
+      discriminator: [19, 164, 237, 254, 64, 139, 237, 93],
       accounts: [
         { name: "bidder", writable: true, signer: true },
         { name: "auctionState", writable: true, signer: false },
@@ -61,7 +61,7 @@ const IDL: Idl = {
     },
     {
       name: "claimTokens",
-      discriminator: [],
+      discriminator: [108, 216, 210, 231, 0, 212, 42, 64],
       accounts: [
         { name: "bidder", writable: true, signer: true },
         { name: "bidReceipt", writable: true, signer: false },
@@ -75,7 +75,7 @@ const IDL: Idl = {
     },
     {
       name: "claimRefund",
-      discriminator: [],
+      discriminator: [15, 16, 30, 161, 255, 228, 97, 60],
       accounts: [
         { name: "bidder", writable: true, signer: true },
         { name: "bidReceipt", writable: true, signer: false },
@@ -87,11 +87,11 @@ const IDL: Idl = {
   accounts: [
     {
       name: "auctionState",
-      discriminator: [],
+      discriminator: [252, 227, 205, 147, 72, 64, 250, 126],
     },
     {
       name: "bidReceipt",
-      discriminator: [],
+      discriminator: [186, 150, 141, 135, 59, 122, 39, 99],
     },
   ],
   types: [
