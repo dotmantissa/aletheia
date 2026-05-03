@@ -24,8 +24,8 @@ export default function ConfirmModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
-      <div className="surface w-full max-w-xl p-6">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="surface w-full max-w-xl p-6" onClick={(event) => event.stopPropagation()}>
         <h3 className="text-3xl">{title}</h3>
         <p className="mt-2 text-xs text-[#6b6560]">{description}</p>
 

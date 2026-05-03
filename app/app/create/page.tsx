@@ -4,12 +4,10 @@ export const dynamic = "force-dynamic";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Metaplex } from "@metaplex-foundation/js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/components/ToastProvider";
-import { createAuctionTx, toAnchorWallet } from "@/lib/anchor";
+import { createAuctionTx, TOKEN_PROGRAM_ID, toAnchorWallet } from "@/lib/anchor";
 import { useAuctionStore } from "@/hooks/useAuction";
 import { truncateAddress } from "@/lib/format";
 
@@ -37,6 +35,7 @@ type ValidationState = {
   message: string;
 };
 type ResolvedMetadata = { name: string; symbol: string; imageUri: string | null };
+const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
 export default function CreateAuctionPage() {
   const router = useRouter();
@@ -87,6 +86,10 @@ export default function CreateAuctionPage() {
     totalSupply.trim() !== "1000000" ||
     minBidFloor.trim() !== "0.5";
 
+  const selectedToken = useMemo(
+    () => tokenChoices.find((choice) => choice.mint === selectedTokenMint) ?? null,
+    [tokenChoices, selectedTokenMint],
+  );
   const preview = useMemo(
     () => ({
       tokenName: selectedToken?.name || manualMetadata?.name || tokenName,
@@ -99,11 +102,7 @@ export default function CreateAuctionPage() {
     }),
     [selectedToken, manualMetadata, tokenName, tokenMint, totalSupply, minBidFloor, effectiveDuration],
   );
-
-  const selectedToken = useMemo(
-    () => tokenChoices.find((choice) => choice.mint === selectedTokenMint) ?? null,
-    [tokenChoices, selectedTokenMint],
-  );
+  const closeAtUtc = useMemo(() => new Date(Date.now() + effectiveDuration * 1000).toUTCString(), [effectiveDuration]);
 
   useEffect(() => {
     if (mode === "AUTO" && connected && wallet.publicKey && autoState === "idle") {
@@ -143,17 +142,15 @@ export default function CreateAuctionPage() {
         setAutoState("empty");
         return;
       }
-      const metaplex = Metaplex.make(connection);
       const withMetadata = await Promise.all(
         choices.map(async (choice) => {
           try {
-            const mintPk = new PublicKey(choice.mint);
-            const metadata = await metaplex.nfts().findByMint({ mintAddress: mintPk });
+            const metadata = await resolveMetadata(choice.mint);
             return {
               ...choice,
-              symbol: metadata.symbol?.trim() || choice.symbol,
-              name: metadata.name?.trim() || choice.name,
-              imageUri: metadata.json?.image ?? null,
+              symbol: metadata.symbol || choice.symbol,
+              name: metadata.name || choice.name,
+              imageUri: metadata.imageUri,
             };
           } catch {
             return choice;
@@ -172,6 +169,47 @@ export default function CreateAuctionPage() {
     return /^[1-9A-HJ-NP-Za-km-z]{44}$/.test(value);
   }
 
+  async function resolveMetadata(mintAddress: string): Promise<ResolvedMetadata> {
+    const mint = new PublicKey(mintAddress);
+    const [metadataPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("metadata"), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+      METADATA_PROGRAM_ID,
+    );
+    const accountInfo = await connection.getAccountInfo(metadataPda);
+    if (!accountInfo) {
+      return { name: truncateAddress(mintAddress, 4, 4), symbol: truncateAddress(mintAddress, 4, 4), imageUri: null };
+    }
+
+    const data = accountInfo.data;
+    const nameStart = 1 + 32 + 32;
+    const symbolStart = nameStart + 32;
+    const uriStart = symbolStart + 10;
+    const name = data.subarray(nameStart, nameStart + 32).toString("utf8").replace(/\0/g, "").trim();
+    const symbol = data.subarray(symbolStart, symbolStart + 10).toString("utf8").replace(/\0/g, "").trim();
+    const uri = data.subarray(uriStart, uriStart + 200).toString("utf8").replace(/\0/g, "").trim();
+    if (!uri) {
+      return {
+        name: name || truncateAddress(mintAddress, 4, 4),
+        symbol: symbol || truncateAddress(mintAddress, 4, 4),
+        imageUri: null,
+      };
+    }
+    try {
+      const json = await fetch(uri).then((res) => (res.ok ? res.json() : null));
+      return {
+        name: name || truncateAddress(mintAddress, 4, 4),
+        symbol: symbol || truncateAddress(mintAddress, 4, 4),
+        imageUri: json?.image ?? null,
+      };
+    } catch {
+      return {
+        name: name || truncateAddress(mintAddress, 4, 4),
+        symbol: symbol || truncateAddress(mintAddress, 4, 4),
+        imageUri: null,
+      };
+    }
+  }
+
   async function validateMintField(value: string) {
     const trimmed = value.trim();
     if (!isStrictSolanaAddress(trimmed)) {
@@ -179,12 +217,11 @@ export default function CreateAuctionPage() {
       return;
     }
     try {
-      const metaplex = Metaplex.make(connection);
-      const metadata = await metaplex.nfts().findByMint({ mintAddress: new PublicKey(trimmed) });
-      const resolvedSymbol = metadata.symbol?.trim() || truncateAddress(trimmed, 4, 4);
-      const resolvedName = metadata.name?.trim() || resolvedSymbol;
+      const metadata = await resolveMetadata(trimmed);
+      const resolvedSymbol = metadata.symbol || truncateAddress(trimmed, 4, 4);
+      const resolvedName = metadata.name || resolvedSymbol;
       setTokenName(resolvedSymbol);
-      setManualMetadata({ name: resolvedName, symbol: resolvedSymbol, imageUri: metadata.json?.image ?? null });
+      setManualMetadata({ name: resolvedName, symbol: resolvedSymbol, imageUri: metadata.imageUri });
       setMintValidation({ status: "valid", message: `✓ Resolved: ${resolvedSymbol} (${resolvedName})` });
     } catch {
       setManualMetadata({ name: truncateAddress(trimmed, 4, 4), symbol: truncateAddress(trimmed, 4, 4), imageUri: null });
@@ -542,19 +579,19 @@ export default function CreateAuctionPage() {
 
       <ConfirmModal
         title="Confirm Auction Seal"
-        description="Review every parameter before your wallet signs."
+        description="You are about to seal this auction on-chain. This action is irreversible."
         open={showConfirm}
-        confirmLabel="Seal the Auction"
+        confirmLabel="Confirm & Sign →"
         loading={loading}
         onClose={() => setShowConfirm(false)}
         onConfirm={sealAuction}
         rows={[
-          { label: "Token Name", value: tokenName },
-          { label: "Token Mint", value: tokenMint },
-          { label: "Authority Token Account", value: authorityTokenAccount },
-          { label: "Total Supply", value: totalSupply },
-          { label: "Minimum Bid Floor", value: `${minBidFloor} SOL` },
-          { label: "Duration", value: `${effectiveDuration} seconds` },
+          { label: "Token", value: preview.tokenSymbol || tokenName },
+          { label: "Mint", value: truncateAddress(tokenMint, 4, 4) },
+          { label: "Supply", value: Number(totalSupply || 0).toLocaleString() },
+          { label: "Min Bid Floor", value: `${minBidFloor} SOL` },
+          { label: "Duration", value: humanDuration(effectiveDuration) },
+          { label: "Closes at", value: closeAtUtc },
         ]}
       />
     </main>
