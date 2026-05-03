@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Metaplex } from "@metaplex-foundation/js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/components/ToastProvider";
@@ -118,7 +119,24 @@ export default function CreateAuctionPage() {
         setAutoState("empty");
         return;
       }
-      setTokenChoices(choices);
+      const metaplex = Metaplex.make(connection);
+      const withMetadata = await Promise.all(
+        choices.map(async (choice) => {
+          try {
+            const mintPk = new PublicKey(choice.mint);
+            const metadata = await metaplex.nfts().findByMint({ mintAddress: mintPk });
+            return {
+              ...choice,
+              symbol: metadata.symbol?.trim() || choice.symbol,
+              name: metadata.name?.trim() || choice.name,
+              imageUri: metadata.json?.image ?? null,
+            };
+          } catch {
+            return choice;
+          }
+        }),
+      );
+      setTokenChoices(withMetadata);
       setAutoState("ready");
     } catch {
       setAutoState("error");
@@ -279,9 +297,14 @@ export default function CreateAuctionPage() {
                           className="flex w-full items-center justify-between gap-3 border-b border-[#1a1a1a] px-3 py-3 text-left transition-soft hover:bg-[#171717]"
                         >
                           <div className="flex min-w-0 items-center gap-3">
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#1f1f1f] text-[11px] text-[#c8892a]">
-                              ◉
-                            </span>
+                            {choice.imageUri ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={choice.imageUri} alt={choice.symbol} className="h-7 w-7 rounded-full object-cover" />
+                            ) : (
+                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#1f1f1f] text-[11px] text-[#c8892a]">
+                                ◉
+                              </span>
+                            )}
                             <span className="min-w-0">
                               <span className="block truncate text-xs">{choice.name} — {choice.symbol}</span>
                             </span>
