@@ -1,20 +1,175 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg: #0a0a0a;
-  --text: #f0ede8;
-  --accent: #c8892a;
+  --bg: #080808;
+  --surface: #111111;
+  --border: #1e1e1e;
+  --text-primary: #f0ede8;
+  --text-secondary: #6b6560;
+  --accent-gold: #c8892a;
+  --accent-gold-hover: #e0a040;
+  --success: #2a7a4a;
+  --danger: #7a2a2a;
+  --sealed: #1a3a5c;
+  --revealed: #c8892a;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
+html,
 body {
   margin: 0;
+  min-height: 100%;
   background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+  color: var(--text-primary);
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+body {
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.08;
+  z-index: 50;
+  background-image: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.12) 0, transparent 35%),
+    radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.08) 0, transparent 25%),
+    radial-gradient(circle at 0% 60%, rgba(255, 255, 255, 0.08) 0, transparent 30%);
+  mix-blend-mode: soft-light;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 51;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.75'/%3E%3C/svg%3E");
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "Cormorant Garamond", Garamond, serif;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.font-display {
+  font-family: "Cormorant Garamond", Garamond, serif;
+}
+
+.font-ui,
+.font-mono {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.reveal-up {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: reveal-up 650ms var(--ease-out) forwards;
+}
+
+@keyframes reveal-up {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-sealed {
+  0% {
+    box-shadow: 0 0 0 0 rgba(26, 58, 92, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(26, 58, 92, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(26, 58, 92, 0);
+  }
+}
+
+@keyframes sweep-reveal {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+.transition-soft {
+  transition: all 400ms var(--ease-out);
+}
+
+.button-gold {
+  background: var(--accent-gold);
+  color: #14110a;
+  border: 1px solid var(--accent-gold);
+  transition: all 400ms var(--ease-out);
+}
+
+.button-gold:hover:not(:disabled) {
+  background: var(--accent-gold-hover);
+  border-color: var(--accent-gold-hover);
+}
+
+.button-gold:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button-outline {
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  background: transparent;
+  transition: all 400ms var(--ease-out);
+}
+
+.button-outline:hover:not(:disabled) {
+  border-color: #3c3c3c;
+  background: #0d0d0d;
+}
+
+.input-dark {
+  width: 100%;
+  background: #0b0b0b;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.75rem;
+  outline: none;
+  transition: border-color 400ms var(--ease-out), box-shadow 400ms var(--ease-out);
+}
+
+.input-dark:focus {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 0 2px rgba(200, 137, 42, 0.2);
+}
+
+.page-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
