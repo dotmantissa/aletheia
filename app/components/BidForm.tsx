@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { encryptBid } from "../../arcium/encryption";
+import { encryptBid } from "@/lib/encryption";
 import { useBid } from "@/hooks/useBid";
 
 export default function BidForm({ arciumPublicKey, disabled }: { arciumPublicKey: string; disabled?: boolean }) {
@@ -11,7 +11,7 @@ export default function BidForm({ arciumPublicKey, disabled }: { arciumPublicKey
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const encrypted = encryptBid(Number(amount), Number(quantity), arciumPublicKey);
+    const encrypted = await encryptBid(Number(amount), Number(quantity), arciumPublicKey);
     await submitEncryptedBid(encrypted);
   }
 

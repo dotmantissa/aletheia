@@ -2,14 +2,14 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{program::invoke, system_instruction};
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("ALETHX1A1111111111111111111111111111111111");
+declare_id!("11111111111111111111111111111111");
 
 const AUCTION_SEED: &[u8] = b"auction";
 const VAULT_AUTH_SEED: &[u8] = b"vault_auth";
 const BID_SEED: &[u8] = b"bid";
 
 // Replace with Arcium verifier program on deployment.
-const ARCIUM_VERIFIER_PROGRAM: Pubkey = pubkey!("Arc1umV3r1f13r111111111111111111111111111");
+const ARCIUM_VERIFIER_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
 
 #[program]
 pub mod aletheia {
@@ -191,11 +191,13 @@ pub mod aletheia {
             .checked_sub(cost)
             .ok_or(AuctionError::MathOverflow)?;
 
+        let auction_key = auction.key();
         let signer_seeds: &[&[u8]] = &[
             VAULT_AUTH_SEED,
-            auction.key().as_ref(),
+            auction_key.as_ref(),
             &[auction.vault_authority_bump],
         ];
+        let signer_binding = [signer_seeds];
 
         let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
@@ -204,7 +206,7 @@ pub mod aletheia {
                 to: ctx.accounts.bidder_token_account.to_account_info(),
                 authority: ctx.accounts.vault_authority.to_account_info(),
             },
-            &[signer_seeds],
+            &signer_binding,
         );
         token::transfer(cpi_ctx, allocation)?;
 
@@ -264,15 +266,15 @@ pub struct CreateAuction<'info> {
         bump,
         space = 8 + AuctionState::MAX_SIZE
     )]
-    pub auction_state: Account<'info, AuctionState>,
-    pub token_mint: Account<'info, Mint>,
+    pub auction_state: Box<Account<'info, AuctionState>>,
+    pub token_mint: Box<Account<'info, Mint>>,
     #[account(
         init,
         payer = authority,
         token::mint = token_mint,
         token::authority = vault_authority,
     )]
-    pub token_vault: Account<'info, TokenAccount>,
+    pub token_vault: Box<Account<'info, TokenAccount>>,
     #[account(
         seeds = [VAULT_AUTH_SEED, auction_state.key().as_ref()],
         bump
@@ -284,7 +286,7 @@ pub struct CreateAuction<'info> {
         constraint = authority_token_account.mint == token_mint.key() @ AuctionError::InvalidAuthorityTokenAccount,
         constraint = authority_token_account.owner == authority.key() @ AuctionError::InvalidAuthorityTokenAccount,
     )]
-    pub authority_token_account: Account<'info, TokenAccount>,
+    pub authority_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,

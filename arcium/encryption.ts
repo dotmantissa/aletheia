@@ -3,8 +3,8 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypt
 export type EncryptedBidBlob = Uint8Array;
 
 interface BidPayload {
-  amountLamports: bigint;
-  quantity: bigint;
+  amountLamports: string;
+  quantity: string;
   nonce: string;
 }
 
@@ -34,8 +34,8 @@ export function encryptBid(
   const key = normalizeClusterKey(arciumPublicKey);
 
   const payload: BidPayload = {
-    amountLamports,
-    quantity: qty,
+    amountLamports: amountLamports.toString(),
+    quantity: qty.toString(),
     nonce: nonce.toString("hex"),
   };
 

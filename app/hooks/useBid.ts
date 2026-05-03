@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { payloadHash } from "../../arcium/encryption";
+import { payloadHash } from "@/lib/encryption";
 
 export function useBid() {
   const [submitting, setSubmitting] = useState(false);
@@ -12,7 +12,7 @@ export function useBid() {
     try {
       setSubmitting(true);
       setError("");
-      const hash = payloadHash(encryptedPayload);
+      const hash = await payloadHash(encryptedPayload);
       setReceiptHash(hash);
       return hash;
     } catch (e) {

@@ -1,0 +1,16 @@
+# Build artifacts
+/target/
+**/.next/
+
+# Dependencies
+**/node_modules/
+
+# Secrets and local env
+.keys/
+.env
+.env.*
+app/.env.local
+
+# Tooling
+.DS_Store
+*.log

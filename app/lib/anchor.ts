@@ -1,15 +1,19 @@
 "use client";
 
 import * as anchor from "@coral-xyz/anchor";
-import { Program, web3 } from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
 import { Connection } from "@solana/web3.js";
 import { PROGRAM_ID, RPC_URL } from "./constants";
 
 const IDL = {
-  version: "0.1.0",
-  name: "aletheia",
+  address: PROGRAM_ID,
+  metadata: {
+    name: "aletheia",
+    version: "0.1.0",
+    spec: "0.1.0",
+  },
   instructions: [],
-} as anchor.Idl;
+} as unknown as anchor.Idl;
 
 export function getConnection() {
   return new Connection(RPC_URL, "confirmed");
@@ -21,5 +25,5 @@ export function getProvider(wallet: anchor.Wallet) {
 
 export function getProgram(wallet: anchor.Wallet): Program {
   const provider = getProvider(wallet);
-  return new Program(IDL, new web3.PublicKey(PROGRAM_ID), provider);
+  return new Program(IDL, provider);
 }

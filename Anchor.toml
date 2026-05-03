@@ -3,7 +3,7 @@ seeds = true
 skip-lint = false
 
 [programs.devnet]
-aletheia = "ALETHX1A1111111111111111111111111111111111"
+aletheia = "GT5NYsctT5vnR6U1o45Jk28KREtjho6EApuAbaMrVK8g"
 
 [provider]
 cluster = "Devnet"
