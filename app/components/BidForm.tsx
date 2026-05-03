@@ -6,6 +6,7 @@ import { useBid } from "@/hooks/useBid";
 import { useWallet } from "@solana/wallet-adapter-react";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/components/ToastProvider";
+import CopyableText from "@/components/CopyableText";
 import { truncateAddress } from "@/lib/format";
 
 interface BidFormProps {
@@ -45,7 +46,7 @@ export default function BidForm({ arciumPublicKey, locked }: BidFormProps) {
       setSealedAt(new Date().toLocaleString());
       notify("Your bid is locked inside Arcium. It cannot be seen or changed.", "success");
     } catch (error) {
-      notify(error instanceof Error ? error.message : "The seal failed. Retry from the dark.", "error");
+      notify(error instanceof Error ? error.message : "The seal resisted this attempt. Re-enter with valid values.", "error");
     } finally {
       setConfirmOpen(false);
     }
@@ -54,7 +55,7 @@ export default function BidForm({ arciumPublicKey, locked }: BidFormProps) {
   function openConfirm(event: FormEvent) {
     event.preventDefault();
     if (!connected) {
-      notify("Connect wallet to participate", "error");
+      notify("Connect wallet to bid", "error");
       return;
     }
     if (locked || submitted) return;
@@ -65,7 +66,7 @@ export default function BidForm({ arciumPublicKey, locked }: BidFormProps) {
     <div className="relative surface p-5">
       {!connected ? (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#080808de] p-6 text-center">
-          <p className="text-xs text-[#f0ede8]">Connect wallet to participate</p>
+          <p className="text-xs text-[#f0ede8]">Connect wallet to bid</p>
         </div>
       ) : null}
 
@@ -104,7 +105,7 @@ export default function BidForm({ arciumPublicKey, locked }: BidFormProps) {
           disabled={locked || submitted || submitting || !connected}
           className="button-gold w-full rounded-[4px] px-4 py-3 text-xs"
         >
-          {submitted ? "Bid sealed ✓" : submitting ? "Sealing..." : "Seal Bid →"}
+          {!connected ? "Connect wallet to bid" : submitted ? "Bid sealed ✓" : submitting ? "Sealing..." : "Seal Bid →"}
         </button>
       </form>
 
@@ -112,7 +113,8 @@ export default function BidForm({ arciumPublicKey, locked }: BidFormProps) {
         <div className="mt-4 rounded-[4px] border border-[#1e1e1e] bg-[#0c0c0c] p-4 text-xs">
           <p className="text-[#6b6560]">Bid Receipt</p>
           <p className="mt-2 font-mono">Timestamp: {sealedAt}</p>
-          <p className="mt-1 font-mono">Bid hash: {truncateAddress(receiptHash, 10, 8)}</p>
+          <p className="mt-1 text-[#6b6560]">Bid hash:</p>
+          <CopyableText value={receiptHash} className="mt-1 text-[#c8892a]" head={12} tail={10} />
           <p className="mt-2 text-[#6b6560]">Your bid is locked inside Arcium. It cannot be seen or changed.</p>
         </div>
       ) : null}

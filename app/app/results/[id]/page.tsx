@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import ResultsReveal from "@/components/ResultsReveal";
@@ -12,10 +12,15 @@ export default function ResultsPage() {
   const { id } = useParams<{ id: string }>();
   const { connected, publicKey } = useWallet();
   const { notify } = useToast();
+  const hydrateMock = useAuctionStore((s) => s.hydrateMock);
   const auction = useAuctionStore((s) => s.byId(id));
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    hydrateMock();
+  }, [hydrateMock]);
 
   if (!auction || auction.status !== "SETTLED") {
     return (
@@ -48,9 +53,13 @@ export default function ResultsPage() {
       <ResultsReveal clearingPriceSol={clearingPriceSol} winnerCount={winners} totalRaisedSol={totalRaised} />
 
       {connected ? (
-        <section className={`mt-6 border p-4 text-xs ${
-          isWinner ? "border-[#2a7a4a] bg-[#102116] text-[#c5e6d2]" : "border-[#1e1e1e] bg-[#111111] text-[#d5d1cb]"
-        }`}>
+        <section
+          className={`mt-6 border p-4 text-xs ${
+            isWinner
+              ? "border-[#2a7a4a] bg-[#102116] text-[#c5e6d2]"
+              : "border-[#1e1e1e] bg-[#111111] text-[#d5d1cb]"
+          }`}
+        >
           {isWinner
             ? `You are among the ${winners} winners. Claim your tokens below.`
             : "Your bid did not clear. Your collateral is ready to reclaim."}

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Auction } from "@/hooks/useAuction";
-import { formatLamportsToSol, truncateAddress } from "@/lib/format";
+import { formatLamportsToSol } from "@/lib/format";
+import CopyableText from "@/components/CopyableText";
 
 function countdownLabel(endTime: number, now: number) {
   const diff = Math.max(0, Math.floor((endTime - now) / 1000));
@@ -37,7 +38,7 @@ export default function AuctionCard({ auction }: { auction: Auction }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-3xl leading-none">{auction.tokenName}</h3>
-            <p className="mt-2 text-xs text-[#6b6560] font-mono">{truncateAddress(auction.tokenMint, 8, 6)}</p>
+            <CopyableText value={auction.tokenMint} className="mt-2 text-xs text-[#6b6560]" />
           </div>
           <span className={`inline-flex items-center gap-2 text-[11px] font-mono ${badge.text}`}>
             <span className={`h-2 w-2 rounded-full ${badge.dot}`} />
