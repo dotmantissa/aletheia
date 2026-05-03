@@ -58,10 +58,12 @@ export default function CreateAuctionPage() {
   const [tokenChoices, setTokenChoices] = useState<TokenChoice[]>([]);
   const [tokenMenuOpen, setTokenMenuOpen] = useState(false);
   const [selectedTokenMint, setSelectedTokenMint] = useState("");
+  const [selectedTokenDecimals, setSelectedTokenDecimals] = useState(0);
   const [autoState, setAutoState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
   const [mintValidation, setMintValidation] = useState<ValidationState>({ status: "idle", message: "" });
   const [accountValidation, setAccountValidation] = useState<ValidationState>({ status: "idle", message: "" });
   const [manualMetadata, setManualMetadata] = useState<ResolvedMetadata | null>(null);
+  const [manualMintDecimals, setManualMintDecimals] = useState(0);
   const [customDurationValue, setCustomDurationValue] = useState("2");
   const [customDurationUnit, setCustomDurationUnit] = useState<"hours" | "days">("hours");
 
@@ -218,6 +220,10 @@ export default function CreateAuctionPage() {
     }
     try {
       const metadata = await resolveMetadata(trimmed);
+      const mintInfo = await connection.getParsedAccountInfo(new PublicKey(trimmed), "confirmed");
+      const parsed = mintInfo.value?.data && "parsed" in mintInfo.value.data ? mintInfo.value.data.parsed : null;
+      const decimals = Number(parsed?.info?.decimals ?? 0);
+      setManualMintDecimals(Number.isFinite(decimals) ? decimals : 0);
       const resolvedSymbol = metadata.symbol || truncateAddress(trimmed, 4, 4);
       const resolvedName = metadata.name || resolvedSymbol;
       setTokenName(resolvedSymbol);
@@ -274,19 +280,33 @@ export default function CreateAuctionPage() {
     setCustomDurationUnit("hours");
     setTokenChoices([]);
     setSelectedTokenMint("");
+    setSelectedTokenDecimals(0);
     setAutoState(nextMode === "AUTO" ? "idle" : "ready");
     setMintValidation({ status: "idle", message: "" });
     setAccountValidation({ status: "idle", message: "" });
     setManualMetadata(null);
+    setManualMintDecimals(0);
   }
 
   function pickToken(choice: TokenChoice) {
     setSelectedTokenMint(choice.mint);
+    setSelectedTokenDecimals(choice.decimals);
     setTokenMint(choice.mint);
     setAuthorityTokenAccount(choice.tokenAccount);
     setTokenName(choice.symbol || "TOKEN");
     setTotalSupply(Math.floor(choice.balanceUi).toString());
     setTokenMenuOpen(false);
+  }
+
+  function toBaseUnits(amount: string, decimals: number): bigint {
+    const [wholeRaw, fractionRaw = ""] = amount.trim().split(".");
+    const whole = wholeRaw === "" ? "0" : wholeRaw;
+    if (!/^\d+$/.test(whole) || !/^\d*$/.test(fractionRaw)) {
+      throw new Error("Total token supply must be a valid number");
+    }
+    const clampedFraction = fractionRaw.slice(0, decimals).padEnd(decimals, "0");
+    const merged = `${whole}${clampedFraction}`.replace(/^0+(?=\d)/, "");
+    return BigInt(merged === "" ? "0" : merged);
   }
 
   function openConfirmation(event: FormEvent) {
@@ -303,11 +323,12 @@ export default function CreateAuctionPage() {
     setLoading(true);
     try {
       notify("The seal is set. Awaiting signature and finality.", "info");
+      const decimals = mode === "AUTO" ? selectedTokenDecimals : manualMintDecimals;
       const result = await createAuctionTx({
         wallet: toAnchorWallet(wallet),
         tokenMint: new PublicKey(tokenMint),
         authorityTokenAccount: new PublicKey(authorityTokenAccount),
-        totalSupply: BigInt(Math.floor(Number(totalSupply))),
+        totalSupply: toBaseUnits(totalSupply, decimals),
         minBidFloorLamports: BigInt(Math.round(Number(minBidFloor) * 1_000_000_000)),
         durationSeconds: effectiveDuration,
       });

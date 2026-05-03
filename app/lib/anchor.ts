@@ -222,7 +222,7 @@ export async function createAuctionTx(params: {
   const [vaultAuthority] = deriveVaultAuthorityPda(auction);
   const tokenVault = Keypair.generate();
 
-  const signature = await program.methods
+  const builder = program.methods
     .createAuction(
       new anchor.BN(params.totalSupply.toString()),
       new anchor.BN(params.minBidFloorLamports.toString()),
@@ -239,8 +239,25 @@ export async function createAuctionTx(params: {
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
     })
-    .signers([tokenVault])
-    .rpc();
+    .signers([tokenVault]);
+
+  if (process.env.NODE_ENV === "development") {
+    const tx = await builder.transaction();
+    tx.feePayer = authority;
+    const latest = await program.provider.connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = latest.blockhash;
+    tx.partialSign(tokenVault);
+    const signed = await params.wallet.signTransaction(tx);
+    const simulation = await program.provider.connection.simulateTransaction(signed, { sigVerify: false });
+    // Keep these logs in dev only for exact on-chain failure visibility.
+    console.log("Simulation logs:", simulation.value.logs);
+    if (simulation.value.err) {
+      console.error("Simulation error:", simulation.value.err);
+      throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
+    }
+  }
+
+  const signature = await builder.rpc();
 
   return { signature, auction };
 }

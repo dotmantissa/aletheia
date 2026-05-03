@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{program::invoke, system_instruction};
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("GT5NYsctT5vnR6U1o45Jk28KREtjho6EApuAbaMrVK8g");
 
 const AUCTION_SEED: &[u8] = b"auction";
 const VAULT_AUTH_SEED: &[u8] = b"vault_auth";
