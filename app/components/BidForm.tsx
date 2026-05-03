@@ -10,11 +10,12 @@ import CopyableText from "@/components/CopyableText";
 import { truncateAddress } from "@/lib/format";
 
 interface BidFormProps {
+  auctionId: string;
   arciumPublicKey: string;
   locked: boolean;
 }
 
-export default function BidForm({ arciumPublicKey, locked }: BidFormProps) {
+export default function BidForm({ auctionId, arciumPublicKey, locked }: BidFormProps) {
   const { connected, publicKey } = useWallet();
   const { notify } = useToast();
   const [amount, setAmount] = useState("0.50");
@@ -41,7 +42,7 @@ export default function BidForm({ arciumPublicKey, locked }: BidFormProps) {
   async function sealBid() {
     try {
       const encrypted = await encryptBid(Number(amount), Number(quantity), arciumPublicKey);
-      await submitEncryptedBid(encrypted);
+      await submitEncryptedBid(auctionId, encrypted);
       setSubmitted(true);
       setSealedAt(new Date().toLocaleString());
       notify("Your bid is locked inside Arcium. It cannot be seen or changed.", "success");

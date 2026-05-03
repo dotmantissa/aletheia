@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { useEffect } from "react";
@@ -9,11 +10,11 @@ import { useAuctionStore } from "@/hooks/useAuction";
 export default function HomePage() {
   const { connected } = useWallet();
   const auctions = useAuctionStore((s) => s.auctions);
-  const hydrateMock = useAuctionStore((s) => s.hydrateMock);
+  const hydrateFromChain = useAuctionStore((s) => s.hydrateFromChain);
 
   useEffect(() => {
-    hydrateMock();
-  }, [hydrateMock]);
+    hydrateFromChain();
+  }, [hydrateFromChain]);
 
   return (
     <main className="page-shell pb-12 sm:pb-20">

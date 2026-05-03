@@ -3,24 +3,52 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
 import ResultsReveal from "@/components/ResultsReveal";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useAuctionStore } from "@/hooks/useAuction";
 import { useToast } from "@/components/ToastProvider";
+import { claimRefundTx, claimTokensTx, getConnection, toAnchorWallet } from "@/lib/anchor";
 
 export default function ResultsPage() {
   const { id } = useParams<{ id: string }>();
-  const { connected, publicKey } = useWallet();
+  const wallet = useWallet();
+  const { connected, publicKey } = wallet;
   const { notify } = useToast();
-  const hydrateMock = useAuctionStore((s) => s.hydrateMock);
+  const hydrateFromChain = useAuctionStore((s) => s.hydrateFromChain);
   const auction = useAuctionStore((s) => s.byId(id));
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [winnerMap, setWinnerMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    hydrateMock();
-  }, [hydrateMock]);
+    hydrateFromChain();
+  }, [hydrateFromChain]);
+
+  useEffect(() => {
+    async function hydrateWinners() {
+      try {
+        const account = await getConnection().getAccountInfo(new PublicKey(id));
+        if (!account || account.data.length < 64) return;
+        const data = account.data.subarray(8);
+        let offset = 0;
+        offset += 1 + 1 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 8 + 8 + 8;
+        const vecLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(offset, true);
+        offset += 4;
+        const next: Record<string, boolean> = {};
+        for (let i = 0; i < vecLen; i += 1) {
+          const winner = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
+          next[winner] = true;
+          offset += 32;
+        }
+        setWinnerMap(next);
+      } catch {
+        setWinnerMap({});
+      }
+    }
+    hydrateWinners();
+  }, [id, auction?.winnerCount]);
 
   if (!auction || auction.status !== "SETTLED") {
     return (
@@ -37,15 +65,27 @@ export default function ResultsPage() {
   const winners = auction.winnerCount ?? 0;
   const totalRaised = Number(auction.totalRaised ?? 0n) / 1_000_000_000;
 
-  const isWinner = connected && publicKey ? publicKey.toBase58().charCodeAt(0) % 2 === 0 : false;
+  const isWinner = connected && publicKey ? Boolean(winnerMap[publicKey.toBase58()]) : false;
   const isLoser = connected && !isWinner;
 
   async function handleClaim() {
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    notify(isWinner ? "Claim request sealed and submitted." : "Refund request sealed and submitted.", "success");
-    setLoading(false);
-    setConfirmOpen(false);
+    try {
+      if (!connected || !publicKey) throw new Error("Connect wallet to participate");
+      if (isWinner) {
+        const sig = await claimTokensTx({ wallet: toAnchorWallet(wallet), auction: new PublicKey(id) });
+        notify(`Token claim finalized: ${sig.slice(0, 8)}...`, "success");
+      } else {
+        const sig = await claimRefundTx({ wallet: toAnchorWallet(wallet), auction: new PublicKey(id) });
+        notify(`Refund finalized: ${sig.slice(0, 8)}...`, "success");
+      }
+      await hydrateFromChain();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Settlement claim failed", "error");
+    } finally {
+      setLoading(false);
+      setConfirmOpen(false);
+    }
   }
 
   return (

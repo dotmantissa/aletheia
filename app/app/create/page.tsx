@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,6 +7,8 @@ import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/components/ToastProvider";
+import { createAuctionTx, toAnchorWallet } from "@/lib/anchor";
+import { useAuctionStore } from "@/hooks/useAuction";
 
 const durationOptions = [
   { label: "1h", value: 3600 },
@@ -19,9 +22,12 @@ const durationOptions = [
 export default function CreateAuctionPage() {
   const router = useRouter();
   const { connected } = useWallet();
+  const wallet = useWallet();
   const { notify } = useToast();
+  const hydrateFromChain = useAuctionStore((s) => s.hydrateFromChain);
 
   const [tokenMint, setTokenMint] = useState("");
+  const [authorityTokenAccount, setAuthorityTokenAccount] = useState("");
   const [tokenName, setTokenName] = useState("TOKEN");
   const [totalSupply, setTotalSupply] = useState("1000000");
   const [minBidFloor, setMinBidFloor] = useState("0.5");
@@ -46,6 +52,7 @@ export default function CreateAuctionPage() {
   function validate() {
     if (!connected) throw new Error("Connect wallet to participate");
     new PublicKey(tokenMint);
+    new PublicKey(authorityTokenAccount);
     if (!Number.isFinite(Number(totalSupply)) || Number(totalSupply) <= 0) {
       throw new Error("Total token supply must be greater than zero");
     }
@@ -70,11 +77,18 @@ export default function CreateAuctionPage() {
   async function sealAuction() {
     setLoading(true);
     try {
-      const auctionId = `${tokenName.toLowerCase()}-${Date.now().toString(36)}`;
       notify("The seal is set. Awaiting signature and finality.", "info");
-      await new Promise((resolve) => setTimeout(resolve, 1100));
+      const result = await createAuctionTx({
+        wallet: toAnchorWallet(wallet),
+        tokenMint: new PublicKey(tokenMint),
+        authorityTokenAccount: new PublicKey(authorityTokenAccount),
+        totalSupply: BigInt(Math.floor(Number(totalSupply))),
+        minBidFloorLamports: BigInt(Math.round(Number(minBidFloor) * 1_000_000_000)),
+        durationSeconds: effectiveDuration,
+      });
+      await hydrateFromChain();
       notify("Auction created. Truth surfaces at close.", "success");
-      router.push(`/auction/${auctionId}?created=1`);
+      router.push(`/auction/${result.auction.toBase58()}?created=1`);
     } catch {
       notify("The seal failed to set. Verify parameters and retry.", "error");
     } finally {
@@ -108,6 +122,8 @@ export default function CreateAuctionPage() {
 
           <label className="block text-xs text-[#6b6560]">Token Mint Address</label>
           <input className="input-dark text-sm" value={tokenMint} onChange={(event) => setTokenMint(event.target.value)} />
+          <label className="block text-xs text-[#6b6560]">Authority Token Account</label>
+          <input className="input-dark text-sm" value={authorityTokenAccount} onChange={(event) => setAuthorityTokenAccount(event.target.value)} />
 
           <label className="block text-xs text-[#6b6560]">Total Token Supply</label>
           <input className="input-dark text-sm" value={totalSupply} onChange={(event) => setTotalSupply(event.target.value)} />
@@ -160,6 +176,7 @@ export default function CreateAuctionPage() {
         rows={[
           { label: "Token Name", value: tokenName },
           { label: "Token Mint", value: tokenMint },
+          { label: "Authority Token Account", value: authorityTokenAccount },
           { label: "Total Supply", value: totalSupply },
           { label: "Minimum Bid Floor", value: `${minBidFloor} SOL` },
           { label: "Duration", value: `${effectiveDuration} seconds` },

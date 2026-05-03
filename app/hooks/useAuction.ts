@@ -1,6 +1,8 @@
 "use client";
 
 import { create } from "zustand";
+import { PublicKey } from "@solana/web3.js";
+import { getConnection, parseProgramId } from "@/lib/anchor";
 
 export type AuctionStatus = "LIVE" | "CLOSED" | "SETTLED";
 
@@ -54,10 +56,20 @@ const mockAuctions: Auction[] = [
   },
 ];
 
+function readU64(bytes: Uint8Array, offset: number) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return view.getBigUint64(offset, true);
+}
+
+function readI64(bytes: Uint8Array, offset: number) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return view.getBigInt64(offset, true);
+}
+
 interface AuctionStore {
   auctions: Auction[];
   hydrated: boolean;
-  hydrateMock: () => void;
+  hydrateFromChain: () => Promise<void>;
   upsertAuction: (auction: Auction) => void;
   byId: (id: string) => Auction | undefined;
 }
@@ -65,11 +77,66 @@ interface AuctionStore {
 export const useAuctionStore = create<AuctionStore>((set, get) => ({
   auctions: [],
   hydrated: false,
-  hydrateMock: () =>
-    set((state) => {
-      if (state.hydrated) return state;
-      return { auctions: mockAuctions, hydrated: true };
-    }),
+  hydrateFromChain: async () => {
+    try {
+      const connection = getConnection();
+      const programId = parseProgramId();
+      const accounts = await connection.getProgramAccounts(programId);
+      const next: Auction[] = [];
+
+      for (const entry of accounts) {
+        // Minimum size check for AuctionState account layout.
+        if (entry.account.data.length < 8 + 2 + 32 * 4 + 8 * 6 + 1 + 4) continue;
+        const data = entry.account.data.subarray(8); // skip discriminator
+        let offset = 0;
+        offset += 1; // bump
+        offset += 1; // vault_authority_bump
+        const auctionId = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
+        offset += 32;
+        offset += 32; // authority
+        const tokenMint = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
+        offset += 32;
+        offset += 32; // token_vault
+        const totalSupply = readU64(data, offset);
+        offset += 8;
+        const minBidFloor = readU64(data, offset);
+        offset += 8;
+        offset += 8; // start_time i64
+        const endTs = Number(readI64(data, offset));
+        offset += 8;
+        const isSettled = data[offset] === 1;
+        offset += 1;
+        const clearingPrice = readU64(data, offset);
+        offset += 8;
+        const winnerCount = Number(readU64(data, offset));
+        offset += 8;
+        const bidCount = Number(readU64(data, offset));
+        const endTime = endTs * 1000;
+        const status: AuctionStatus = isSettled ? "SETTLED" : endTime > Date.now() ? "LIVE" : "CLOSED";
+
+        next.push({
+          id: auctionId,
+          tokenName: `TOKEN-${tokenMint.slice(0, 4)}`,
+          tokenMint,
+          totalSupply,
+          minBidFloor,
+          endTime,
+          bidCount,
+          status,
+          clearingPrice,
+          winnerCount,
+          totalRaised: isSettled ? clearingPrice * BigInt(winnerCount) : 0n,
+        });
+      }
+
+      set({ auctions: next, hydrated: true });
+    } catch {
+      set((state) => ({
+        auctions: state.auctions.length === 0 ? mockAuctions : state.auctions,
+        hydrated: true,
+      }));
+    }
+  },
   upsertAuction: (auction) =>
     set((state) => {
       const ix = state.auctions.findIndex((a) => a.id === auction.id);

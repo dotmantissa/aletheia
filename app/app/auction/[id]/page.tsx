@@ -28,14 +28,14 @@ export default function AuctionPage() {
   const { notify } = useToast();
   const { publicKey: arciumPublicKey, loading: arciumLoading, error: arciumError } = useArcium();
 
-  const hydrateMock = useAuctionStore((s) => s.hydrateMock);
+  const hydrateFromChain = useAuctionStore((s) => s.hydrateFromChain);
   const auction = useAuctionStore((s) => s.byId(id));
 
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    hydrateMock();
-  }, [hydrateMock]);
+    hydrateFromChain();
+  }, [hydrateFromChain]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -152,7 +152,7 @@ export default function AuctionPage() {
               The hidden channel failed to open. Reattempt from a trusted network.
             </div>
           ) : (
-            <BidForm arciumPublicKey={arciumPublicKey} locked={!isLive || !connected} />
+            <BidForm auctionId={id} arciumPublicKey={arciumPublicKey} locked={!isLive || !connected} />
           )}
         </section>
       </div>
