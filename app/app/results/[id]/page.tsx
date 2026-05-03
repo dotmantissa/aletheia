@@ -19,7 +19,7 @@ export default function ResultsPage() {
 
   if (!auction || auction.status !== "SETTLED") {
     return (
-      <main className="page-shell pb-16">
+      <main className="page-shell pb-12 sm:pb-16">
         <section className="surface p-8 text-center">
           <h1 className="text-4xl">The seal remains intact.</h1>
           <p className="mt-2 text-xs text-[#6b6560]">Settlement has not surfaced yet.</p>
@@ -44,7 +44,7 @@ export default function ResultsPage() {
   }
 
   return (
-    <main className="page-shell pb-16">
+    <main className="page-shell pb-12 sm:pb-16">
       <ResultsReveal clearingPriceSol={clearingPriceSol} winnerCount={winners} totalRaisedSol={totalRaised} />
 
       {connected ? (

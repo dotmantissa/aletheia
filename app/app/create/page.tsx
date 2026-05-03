@@ -95,13 +95,13 @@ export default function CreateAuctionPage() {
   }
 
   return (
-    <main className="page-shell pb-16">
-      <h1 className="text-5xl">Open a New Auction</h1>
+    <main className="page-shell pb-12 sm:pb-16">
+      <h1 className="text-4xl sm:text-5xl">Open a New Auction</h1>
       <p className="mt-2 text-xs text-[#6b6560]">
         Once created, the auction is immutable. Set parameters carefully.
       </p>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_0.8fr]">
         <form className="surface space-y-4 p-5" onSubmit={openConfirmation}>
           <label className="block text-xs text-[#6b6560]">Token Name</label>
           <input className="input-dark text-sm" value={tokenName} onChange={(event) => setTokenName(event.target.value)} />

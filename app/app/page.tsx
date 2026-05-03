@@ -16,13 +16,13 @@ export default function HomePage() {
   }, [hydrateMock]);
 
   return (
-    <main className="page-shell pb-20">
+    <main className="page-shell pb-12 sm:pb-20">
       <section className="relative mt-6 overflow-hidden border border-[#1e1e1e] bg-[#111111] p-8">
         <p className="pointer-events-none absolute left-6 top-[-70px] select-none font-display text-[250px] leading-none text-[#f0ede8] opacity-[0.04]">
           Α
         </p>
         <div className="relative z-10">
-          <h1 className="reveal-up text-4xl leading-tight sm:text-5xl">
+          <h1 className="reveal-up text-3xl leading-tight sm:text-5xl">
             Truth, sealed until the moment it must be known.
           </h1>
           <p className="reveal-up mt-4 max-w-3xl text-sm text-[#6b6560]" style={{ animationDelay: "80ms" }}>
@@ -30,13 +30,13 @@ export default function HomePage() {
             exceptions.
           </p>
 
-          <div className="reveal-up mt-8 flex flex-wrap gap-3" style={{ animationDelay: "150ms" }}>
-            <a href="#auctions" className="button-outline rounded-[4px] px-4 py-2 text-xs">
+          <div className="reveal-up mt-8 flex flex-col gap-3 sm:flex-row" style={{ animationDelay: "150ms" }}>
+            <a href="#auctions" className="button-outline rounded-[4px] px-4 py-3 text-xs sm:py-2">
               Browse Auctions
             </a>
             <Link
               href="/create"
-              className="button-gold rounded-[4px] px-4 py-2 text-xs"
+              className="button-gold rounded-[4px] px-4 py-3 text-xs sm:py-2"
               aria-disabled={!connected}
               title={connected ? "" : "Connect your wallet to create an auction"}
               onClick={(event) => {
@@ -49,15 +49,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="reveal-up mt-6 grid grid-cols-1 gap-3 border border-[#1e1e1e] bg-[#111111] p-4 text-xs sm:grid-cols-2 lg:grid-cols-4" style={{ animationDelay: "220ms" }}>
+      <section
+        className="reveal-up mt-6 grid grid-cols-1 gap-3 border border-[#1e1e1e] bg-[#111111] p-4 text-xs sm:grid-cols-2 lg:grid-cols-4"
+        style={{ animationDelay: "220ms" }}
+      >
         <p>Total Auctions Run: <span className="font-mono">148</span></p>
         <p>Total Volume Settled: <span className="font-mono">42,880 SOL</span></p>
         <p>Bids Processed: <span className="font-mono">8,129</span></p>
         <p>Powered by <span className="font-mono">Arcium MPC</span></p>
       </section>
 
-      <section className="mt-16">
-        <h2 className="text-3xl">How The Seal Works</h2>
+      <section className="mt-12 sm:mt-16">
+        <h2 className="text-2xl sm:text-3xl">How The Seal Works</h2>
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
           {[
             {
@@ -86,8 +89,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mt-16 border border-[#1e1e1e] bg-[#111111] p-6">
-        <h2 className="text-3xl">Without Arcium, this protocol does not exist.</h2>
+      <section className="mt-12 sm:mt-16 border border-[#1e1e1e] bg-[#111111] p-6">
+        <h2 className="text-2xl sm:text-3xl">Without Arcium, this protocol does not exist.</h2>
         <p className="mt-3 max-w-3xl text-xs text-[#6b6560]">
           If bids were visible on-chain, MEV bots could react in real time and collusion would become trivial. Arcium
           is not an accessory here. It is the trust layer that preserves concealment until truth is due.
@@ -97,12 +100,12 @@ export default function HomePage() {
         </a>
       </section>
 
-      <section id="auctions" className="mt-16">
+      <section id="auctions" className="mt-12 sm:mt-16">
         <div className="flex items-center justify-between">
-          <h2 className="text-3xl">Active Auctions</h2>
+          <h2 className="text-2xl sm:text-3xl">Active Auctions</h2>
           <Link
             href="/create"
-            className="button-gold rounded-[4px] px-4 py-2 text-xs"
+            className="button-gold rounded-[4px] px-4 py-3 text-xs sm:py-2"
             aria-disabled={!connected}
             title={connected ? "" : "Connect your wallet to create an auction"}
             onClick={(event) => {
@@ -118,7 +121,7 @@ export default function HomePage() {
             <p className="text-lg font-display">No auctions are live. The oracle is quiet.</p>
             <Link
               href="/create"
-              className="button-outline mt-4 inline-flex rounded-[4px] px-4 py-2 text-xs"
+              className="button-outline mt-4 inline-flex rounded-[4px] px-4 py-3 text-xs sm:py-2"
               aria-disabled={!connected}
               onClick={(event) => {
                 if (!connected) event.preventDefault();

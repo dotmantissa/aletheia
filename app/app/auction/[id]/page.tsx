@@ -54,7 +54,7 @@ export default function AuctionPage() {
 
   if (!auction) {
     return (
-      <main className="page-shell pb-16">
+      <main className="page-shell pb-12 sm:pb-16">
         <section className="surface p-8 text-center">
           <h1 className="text-4xl">The oracle is quiet.</h1>
           <p className="mt-2 text-xs text-[#6b6560]">This auction was not found in the current horizon.</p>
@@ -73,10 +73,10 @@ export default function AuctionPage() {
   const isSettled = computedStatus === "SETTLED";
 
   return (
-    <main className="page-shell pb-16">
+    <main className="page-shell pb-12 sm:pb-16">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="surface p-6">
-          <h1 className="text-5xl leading-none">{auction.tokenName}</h1>
+          <h1 className="text-4xl leading-none sm:text-5xl">{auction.tokenName}</h1>
           <p className="mt-3 font-mono text-xs text-[#6b6560]">{truncateAddress(auction.tokenMint, 10, 8)}</p>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -93,7 +93,7 @@ export default function AuctionPage() {
             <p className="font-mono text-xs text-[#6b6560]">[ {auction.bidCount} bids sealed ]</p>
           </div>
 
-          <p className={`mt-8 text-center font-mono text-6xl tracking-[0.22em] ${finalHour && isLive ? "text-[#c8892a]" : "text-[#f0ede8]"}`}>
+          <p className={`mt-8 text-center font-mono text-4xl sm:text-6xl tracking-[0.22em] ${finalHour && isLive ? "text-[#c8892a]" : "text-[#f0ede8]"}`}>
             {countdown}
           </p>
 
