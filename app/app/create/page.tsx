@@ -36,6 +36,7 @@ type ValidationState = {
   status: "idle" | "valid" | "invalid";
   message: string;
 };
+type ResolvedMetadata = { name: string; symbol: string; imageUri: string | null };
 
 export default function CreateAuctionPage() {
   const router = useRouter();
@@ -61,8 +62,23 @@ export default function CreateAuctionPage() {
   const [autoState, setAutoState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
   const [mintValidation, setMintValidation] = useState<ValidationState>({ status: "idle", message: "" });
   const [accountValidation, setAccountValidation] = useState<ValidationState>({ status: "idle", message: "" });
+  const [manualMetadata, setManualMetadata] = useState<ResolvedMetadata | null>(null);
+  const [customDurationValue, setCustomDurationValue] = useState("2");
+  const [customDurationUnit, setCustomDurationUnit] = useState<"hours" | "days">("hours");
 
-  const effectiveDuration = duration === "-1" ? Number(customDuration) : Number(duration);
+  const effectiveDuration =
+    duration === "-1"
+      ? Number(customDurationValue) * (customDurationUnit === "days" ? 86400 : 3600)
+      : Number(duration);
+
+  function humanDuration(totalSeconds: number) {
+    if (totalSeconds % 86400 === 0) {
+      const days = totalSeconds / 86400;
+      return `${days} day${days === 1 ? "" : "s"}`;
+    }
+    const hours = Math.floor(totalSeconds / 3600);
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
 
   const hasFormValues =
     tokenMint.trim().length > 0 ||
@@ -73,13 +89,15 @@ export default function CreateAuctionPage() {
 
   const preview = useMemo(
     () => ({
-      tokenName,
+      tokenName: selectedToken?.name || manualMetadata?.name || tokenName,
+      tokenSymbol: selectedToken?.symbol || manualMetadata?.symbol || tokenName,
+      tokenImageUri: selectedToken?.imageUri || manualMetadata?.imageUri || null,
       tokenMint,
       totalSupply,
       minBidFloor,
       effectiveDuration,
     }),
-    [tokenName, tokenMint, totalSupply, minBidFloor, effectiveDuration],
+    [selectedToken, manualMetadata, tokenName, tokenMint, totalSupply, minBidFloor, effectiveDuration],
   );
 
   const selectedToken = useMemo(
@@ -166,8 +184,10 @@ export default function CreateAuctionPage() {
       const resolvedSymbol = metadata.symbol?.trim() || truncateAddress(trimmed, 4, 4);
       const resolvedName = metadata.name?.trim() || resolvedSymbol;
       setTokenName(resolvedSymbol);
+      setManualMetadata({ name: resolvedName, symbol: resolvedSymbol, imageUri: metadata.json?.image ?? null });
       setMintValidation({ status: "valid", message: `✓ Resolved: ${resolvedSymbol} (${resolvedName})` });
     } catch {
+      setManualMetadata({ name: truncateAddress(trimmed, 4, 4), symbol: truncateAddress(trimmed, 4, 4), imageUri: null });
       setMintValidation({ status: "valid", message: `✓ Resolved: ${truncateAddress(trimmed, 4, 4)}` });
     }
   }
@@ -187,6 +207,9 @@ export default function CreateAuctionPage() {
     new PublicKey(authorityTokenAccount);
     if (!Number.isFinite(Number(totalSupply)) || Number(totalSupply) <= 0) {
       throw new Error("Total token supply must be greater than zero");
+    }
+    if (mode === "AUTO" && selectedToken && Number(totalSupply) > selectedToken.balanceUi) {
+      throw new Error("Total token supply cannot exceed selected wallet token balance");
     }
     if (!Number.isFinite(Number(minBidFloor)) || Number(minBidFloor) <= 0) {
       throw new Error("Minimum bid floor must be greater than zero");
@@ -210,11 +233,14 @@ export default function CreateAuctionPage() {
     setMinBidFloor("0.5");
     setDuration("3600");
     setCustomDuration("7200");
+    setCustomDurationValue("2");
+    setCustomDurationUnit("hours");
     setTokenChoices([]);
     setSelectedTokenMint("");
     setAutoState(nextMode === "AUTO" ? "idle" : "ready");
     setMintValidation({ status: "idle", message: "" });
     setAccountValidation({ status: "idle", message: "" });
+    setManualMetadata(null);
   }
 
   function pickToken(choice: TokenChoice) {
@@ -371,10 +397,28 @@ export default function CreateAuctionPage() {
               {selectedToken ? (
                 <div className="rounded-[4px] border border-[#1e1e1e] bg-[#0d0d0d] p-4">
                   <p className="text-xs text-[#6b6560]">Selected Token</p>
-                  <p className="mt-2 text-2xl">{selectedToken.symbol}</p>
+                  <p className="mt-2 text-2xl">{selectedToken.name}</p>
                   <div className="mt-3 space-y-2 text-xs">
-                    <p className="font-mono">Mint: {truncateAddress(selectedToken.mint, 4, 4)}</p>
-                    <p className="font-mono">Account: {truncateAddress(selectedToken.tokenAccount, 4, 4)}</p>
+                    <p className="flex items-center justify-between gap-3 font-mono">
+                      <span>Mint: {truncateAddress(selectedToken.mint, 4, 4)}</span>
+                      <button
+                        type="button"
+                        className="button-outline rounded-[4px] px-2 py-1 text-[10px]"
+                        onClick={() => navigator.clipboard.writeText(selectedToken.mint)}
+                      >
+                        copy
+                      </button>
+                    </p>
+                    <p className="flex items-center justify-between gap-3 font-mono">
+                      <span>Account: {truncateAddress(selectedToken.tokenAccount, 4, 4)}</span>
+                      <button
+                        type="button"
+                        className="button-outline rounded-[4px] px-2 py-1 text-[10px]"
+                        onClick={() => navigator.clipboard.writeText(selectedToken.tokenAccount)}
+                      >
+                        copy
+                      </button>
+                    </p>
                     <p className="font-mono">Balance: {selectedToken.balanceUi.toLocaleString()} {selectedToken.symbol}</p>
                   </div>
                 </div>
@@ -451,12 +495,22 @@ export default function CreateAuctionPage() {
           </select>
 
           {duration === "-1" ? (
-            <input
-              className="input-dark text-sm"
-              placeholder="Custom duration in seconds"
-              value={customDuration}
-              onChange={(event) => setCustomDuration(event.target.value)}
-            />
+            <div className="grid grid-cols-[1fr_140px] gap-2">
+              <input
+                className="input-dark text-sm"
+                placeholder="Custom duration"
+                value={customDurationValue}
+                onChange={(event) => setCustomDurationValue(event.target.value)}
+              />
+              <select
+                className="input-dark text-sm"
+                value={customDurationUnit}
+                onChange={(event) => setCustomDurationUnit(event.target.value as "hours" | "days")}
+              >
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+              </select>
+            </div>
           ) : null}
 
           <button type="submit" className="button-gold mt-4 w-full rounded-[4px] px-4 py-3 text-xs">
@@ -466,11 +520,22 @@ export default function CreateAuctionPage() {
 
         <aside className="surface p-5">
           <p className="text-xs text-[#6b6560]">Live Preview</p>
-          <h2 className="mt-2 text-4xl leading-none">{preview.tokenName || "TOKEN"}</h2>
-          <p className="mt-2 font-mono text-xs text-[#6b6560]">{preview.tokenMint || "mint-address"}</p>
+          <div className="mt-3 flex items-center gap-3">
+            {preview.tokenImageUri ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={preview.tokenImageUri} alt={preview.tokenSymbol} className="h-9 w-9 rounded-full object-cover" />
+            ) : (
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#1f1f1f] text-xs text-[#c8892a]">◉</span>
+            )}
+            <div>
+              <h2 className="text-4xl leading-none">{preview.tokenName || "TOKEN"}</h2>
+              <p className="mt-1 text-xs text-[#6b6560]">{preview.tokenSymbol || "SYMBOL"}</p>
+            </div>
+          </div>
+          <p className="mt-3 font-mono text-xs text-[#6b6560]">{preview.tokenMint ? truncateAddress(preview.tokenMint, 4, 4) : "mint-address"}</p>
           <p className="mt-6 font-mono text-xs">Min bid: {preview.minBidFloor || "0"} SOL</p>
           <p className="mt-2 font-mono text-xs">Supply: {preview.totalSupply || "0"}</p>
-          <p className="mt-2 font-mono text-xs">Duration: {preview.effectiveDuration} seconds</p>
+          <p className="mt-2 font-mono text-xs">Duration: {humanDuration(preview.effectiveDuration)}</p>
           <p className="mt-6 text-xs text-[#6b6560]">Truth surfaces at close.</p>
         </aside>
       </div>
