@@ -1,0 +1,18 @@
+{
+  "name": "aletheia",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "app"
+  ],
+  "scripts": {
+    "build": "npm --prefix app run build",
+    "dev": "npm --prefix app run dev",
+    "test": "anchor test && npm --prefix app test"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}
