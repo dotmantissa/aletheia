@@ -108,6 +108,7 @@ pub mod aletheia {
             require!(bid_receipt.auction == auction.key(), AuctionError::BidAuctionMismatch);
             require!(bid_receipt.bidder == ctx.accounts.bidder.key(), AuctionError::Unauthorized);
             require!(!bid_receipt.claimed, AuctionError::AlreadyClaimed);
+            require!(bid_receipt.collateral_lamports == 0, AuctionError::SingleBidOnly);
         }
         bid_receipt.encrypted_bid_payload = encrypted_bid_payload;
         bid_receipt.collateral_lamports = bid_receipt
@@ -536,4 +537,6 @@ pub enum AuctionError {
     InvalidBidderTokenAccount,
     #[msg("Winner list exceeds supported maximum")]
     WinnerListTooLarge,
+    #[msg("Only one bid is allowed per wallet for this auction")]
+    SingleBidOnly,
 }
