@@ -1,14 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
 import BidForm from "@/components/BidForm";
 import CopyableText from "@/components/CopyableText";
 import { useAuctionStore } from "@/hooks/useAuction";
 import { useArcium } from "@/hooks/useArcium";
 import { useToast } from "@/components/ToastProvider";
+import { fetchBidReceiptsForAuction, settleAuctionTx, toAnchorWallet } from "@/lib/anchor";
+import { getArciumClient, initArcium, submitComputation } from "@/lib/arcium";
 import { formatLamportsToSol } from "@/lib/format";
 
 function timer(endTime: number, now: number) {
@@ -20,12 +24,14 @@ function timer(endTime: number, now: number) {
 }
 
 export default function AuctionPage() {
+  const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const created = searchParams.get("created");
   const [mounted, setMounted] = useState(false);
 
-  const { connected } = useWallet();
+  const wallet = useWallet();
+  const { connected, publicKey } = wallet;
   const { notify } = useToast();
   const { publicKey: arciumPublicKey, ready: arciumReady, loading: arciumLoading } = useArcium();
 
@@ -33,6 +39,11 @@ export default function AuctionPage() {
   const auction = useAuctionStore((s) => s.byId(id));
 
   const [now, setNow] = useState(Date.now());
+  const [settlementState, setSettlementState] = useState<
+    "idle" | "loading" | "computing" | "finalizing" | "failed" | "success"
+  >("idle");
+  const [settlementError, setSettlementError] = useState("");
+  const [settleBidCount, setSettleBidCount] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -87,6 +98,82 @@ export default function AuctionPage() {
   const isLive = computedStatus === "LIVE";
   const isClosedPending = computedStatus === "CLOSED";
   const isSettled = computedStatus === "SETTLED";
+  const isAuthority = connected && publicKey?.toBase58() === auction.authority;
+  const showSettlePanel = Boolean(isAuthority && isClosedPending && !auction.isSettled);
+  const showPendingMessage = Boolean(!isAuthority && isClosedPending && !auction.isSettled);
+  const showResults = auction.isSettled;
+
+  async function handleSettleAuction() {
+    setSettlementError("");
+    setSettlementState("loading");
+    try {
+      if (!wallet.publicKey) throw new Error("Connect wallet to continue");
+      if (!auction) throw new Error("Auction not found");
+      const auctionPubkey = new PublicKey(auction.id);
+      const receipts = await fetchBidReceiptsForAuction({
+        wallet: toAnchorWallet(wallet),
+        auction: auctionPubkey,
+      });
+      setSettleBidCount(receipts.length);
+      if (receipts.length === 0) {
+        setSettlementState("failed");
+        setSettlementError("No bids were placed. This auction cannot be settled.");
+        return;
+      }
+
+      const arciumOk = await initArcium();
+      if (!arciumOk) {
+        throw new Error("Arcium computation failed. The encrypted bids remain sealed. Retry when the network is available.");
+      }
+      const client = await getArciumClient();
+      if (!client) {
+        throw new Error("Arcium computation failed. The encrypted bids remain sealed. Retry when the network is available.");
+      }
+
+      setSettlementState("computing");
+      const result = await submitComputation(client, {
+        circuit: "clearing_price",
+        inputs: receipts.map((r) => ({
+          bidder: r.bidder.toBase58(),
+          encryptedPayload: r.encryptedBidPayload,
+        })),
+        params: {
+          totalSupply: auction.totalSupply.toString(),
+        },
+      });
+
+      setSettlementState("finalizing");
+      const resultAccount = result.arciumResultAccount ?? "11111111111111111111111111111111";
+      await settleAuctionTx({
+        wallet: toAnchorWallet(wallet),
+        auction: auctionPubkey,
+        clearingPrice: BigInt(result.clearingPrice),
+        winners: result.winners.map((w) => new PublicKey(w)),
+        arciumResultAccount: new PublicKey(resultAccount),
+      });
+      await hydrateFromChain();
+      setSettlementState("success");
+      notify("Truth has been revealed.", "success");
+      setTimeout(() => router.push(`/results/${auction.id}`), 1500);
+    } catch (error) {
+      console.error("settlement flow failed:", error);
+      setSettlementState("failed");
+      setSettlementError(
+        error instanceof Error
+          ? error.message
+          : "Settlement failed. Try again.",
+      );
+      notify("Settlement failed. Try again.", "error");
+    }
+  }
+
+  function settlementButtonLabel() {
+    if (settlementState === "loading") return "Submitting to Arcium...";
+    if (settlementState === "computing") return "Arcium is computing...";
+    if (settlementState === "finalizing") return "Writing result on-chain...";
+    if (settlementState === "success") return "Truth has been revealed.";
+    return "Initiate Settlement →";
+  }
 
   return (
     <main className="page-shell pb-12 sm:pb-16">
@@ -147,12 +234,51 @@ export default function AuctionPage() {
             Minimum bid floor: {formatLamportsToSol(auction.minBidFloor).toFixed(2)} SOL
           </p>
 
-          {isClosedPending ? (
+          {showSettlePanel ? (
+            <div className="mt-6 rounded-[4px] border border-[#1e1e1e] bg-[#111111] p-4 text-xs text-[#f0ede8]">
+              <p>This auction has closed.</p>
+              <p className="mt-1">You are the authority. Initiate settlement to reveal the truth.</p>
+              <p className="mt-3 font-mono text-[#6b6560]">
+                [ {settleBidCount ?? auction.bidCount} bids sealed ] — ready for computation
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  className="button-gold rounded-[4px] px-4 py-2 text-xs disabled:opacity-60"
+                  onClick={handleSettleAuction}
+                  disabled={settlementState === "loading" || settlementState === "computing" || settlementState === "finalizing"}
+                >
+                  {settlementButtonLabel()}
+                </button>
+                {settlementState === "failed" ? (
+                  <button
+                    className="button-outline rounded-[4px] px-4 py-2 text-xs"
+                    onClick={handleSettleAuction}
+                  >
+                    Retry Settlement
+                  </button>
+                ) : null}
+              </div>
+              {settlementError ? <p className="mt-3 text-[#b87a7a]">{settlementError}</p> : null}
+            </div>
+          ) : null}
+
+          {showPendingMessage ? (
             <div
               className="mt-6 rounded-[4px] border border-[#1a3a5c] bg-[#0d1218] p-4 text-xs text-[#9fb3c8]"
               style={{ animation: "pulse-sealed 1.9s infinite" }}
             >
               The seal is closed. Arcium is computing the result.
+            </div>
+          ) : null}
+
+          {showResults ? (
+            <div className="mt-6 rounded-[4px] border border-[#2a2a2a] bg-[#101010] p-4 text-xs text-[#f0ede8]">
+              Settlement complete. The reveal is ready.
+              <div className="mt-3">
+                <Link className="button-outline inline-flex rounded-[4px] px-4 py-2 text-xs" href={`/results/${auction.id}`}>
+                  View Results
+                </Link>
+              </div>
             </div>
           ) : null}
         </section>
