@@ -37,6 +37,31 @@ type ValidationState = {
 type ResolvedMetadata = { name: string; symbol: string; imageUri: string | null };
 const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
+function readBorshString(data: Buffer, offset: number): { value: string; nextOffset: number } {
+  if (offset + 4 > data.length) return { value: "", nextOffset: data.length };
+  const len = data.readUInt32LE(offset);
+  const start = offset + 4;
+  const end = Math.min(start + len, data.length);
+  return {
+    value: data.subarray(start, end).toString("utf8").replace(/\0/g, "").trim(),
+    nextOffset: end,
+  };
+}
+
+function sanitizeImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const normalized = url.startsWith("ipfs://")
+    ? `https://gateway.pinata.cloud/ipfs/${url.slice("ipfs://".length)}`
+    : url;
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== "https:") return null;
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
 export default function CreateAuctionPage() {
   const router = useRouter();
   const { connected } = useWallet();
@@ -182,13 +207,18 @@ export default function CreateAuctionPage() {
       return { name: truncateAddress(mintAddress, 4, 4), symbol: truncateAddress(mintAddress, 4, 4), imageUri: null };
     }
 
-    const data = accountInfo.data;
-    const nameStart = 1 + 32 + 32;
-    const symbolStart = nameStart + 32;
-    const uriStart = symbolStart + 10;
-    const name = data.subarray(nameStart, nameStart + 32).toString("utf8").replace(/\0/g, "").trim();
-    const symbol = data.subarray(symbolStart, symbolStart + 10).toString("utf8").replace(/\0/g, "").trim();
-    const uri = data.subarray(uriStart, uriStart + 200).toString("utf8").replace(/\0/g, "").trim();
+    const data = Buffer.from(accountInfo.data);
+    // mpl-token-metadata layout: key + update_authority + mint + Data{name,symbol,uri,...}
+    let cursor = 1 + 32 + 32;
+    const nameField = readBorshString(data, cursor);
+    cursor = nameField.nextOffset;
+    const symbolField = readBorshString(data, cursor);
+    cursor = symbolField.nextOffset;
+    const uriField = readBorshString(data, cursor);
+
+    const name = nameField.value;
+    const symbol = symbolField.value;
+    const uri = uriField.value;
     if (!uri) {
       return {
         name: name || truncateAddress(mintAddress, 4, 4),
@@ -201,13 +231,13 @@ export default function CreateAuctionPage() {
       return {
         name: name || truncateAddress(mintAddress, 4, 4),
         symbol: symbol || truncateAddress(mintAddress, 4, 4),
-        imageUri: json?.image ?? null,
+        imageUri: sanitizeImageUrl((json?.image as string | null | undefined) ?? uri),
       };
     } catch {
       return {
         name: name || truncateAddress(mintAddress, 4, 4),
         symbol: symbol || truncateAddress(mintAddress, 4, 4),
-        imageUri: null,
+        imageUri: sanitizeImageUrl(uri),
       };
     }
   }
@@ -420,9 +450,9 @@ export default function CreateAuctionPage() {
                           className="flex w-full items-center justify-between gap-3 border-b border-[#1a1a1a] px-3 py-3 text-left transition-soft hover:bg-[#171717]"
                         >
                           <div className="flex min-w-0 items-center gap-3">
-                            {choice.imageUri ? (
+                            {sanitizeImageUrl(choice.imageUri) ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={choice.imageUri} alt={choice.symbol} className="h-7 w-7 rounded-full object-cover" />
+                              <img src={sanitizeImageUrl(choice.imageUri) as string} alt={choice.symbol} className="h-7 w-7 rounded-full object-cover" />
                             ) : (
                               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#1f1f1f] text-[11px] text-[#c8892a]">
                                 ◉
@@ -579,9 +609,9 @@ export default function CreateAuctionPage() {
         <aside className="surface p-5">
           <p className="text-xs text-[#6b6560]">Live Preview</p>
           <div className="mt-3 flex items-center gap-3">
-            {preview.tokenImageUri ? (
+            {sanitizeImageUrl(preview.tokenImageUri) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview.tokenImageUri} alt={preview.tokenSymbol} className="h-9 w-9 rounded-full object-cover" />
+              <img src={sanitizeImageUrl(preview.tokenImageUri) as string} alt={preview.tokenSymbol} className="h-9 w-9 rounded-full object-cover" />
             ) : (
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#1f1f1f] text-xs text-[#c8892a]">◉</span>
             )}
