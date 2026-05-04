@@ -97,13 +97,24 @@ pub mod aletheia {
         )?;
 
         let bid_receipt = &mut ctx.accounts.bid_receipt;
-        bid_receipt.bump = ctx.bumps.bid_receipt;
-        bid_receipt.auction = auction.key();
-        bid_receipt.bidder = ctx.accounts.bidder.key();
+        if bid_receipt.auction == Pubkey::default() {
+            bid_receipt.bump = ctx.bumps.bid_receipt;
+            bid_receipt.auction = auction.key();
+            bid_receipt.bidder = ctx.accounts.bidder.key();
+            bid_receipt.collateral_lamports = 0;
+            bid_receipt.is_winner = false;
+            bid_receipt.claimed = false;
+        } else {
+            require!(bid_receipt.auction == auction.key(), AuctionError::BidAuctionMismatch);
+            require!(bid_receipt.bidder == ctx.accounts.bidder.key(), AuctionError::Unauthorized);
+            require!(!bid_receipt.claimed, AuctionError::AlreadyClaimed);
+        }
         bid_receipt.encrypted_bid_payload = encrypted_bid_payload;
-        bid_receipt.collateral_lamports = collateral_lamports;
+        bid_receipt.collateral_lamports = bid_receipt
+            .collateral_lamports
+            .checked_add(collateral_lamports)
+            .ok_or(AuctionError::MathOverflow)?;
         bid_receipt.is_winner = false;
-        bid_receipt.claimed = false;
 
         auction.bid_count = auction
             .bid_count
@@ -303,7 +314,7 @@ pub struct SubmitBid<'info> {
     #[account(mut)]
     pub auction_state: Account<'info, AuctionState>,
     #[account(
-        init,
+        init_if_needed,
         payer = bidder,
         seeds = [BID_SEED, auction_state.key().as_ref(), bidder.key().as_ref()],
         bump,
