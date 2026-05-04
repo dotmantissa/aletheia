@@ -8,6 +8,7 @@ export type AuctionStatus = "LIVE" | "CLOSED" | "SETTLED";
 
 export interface Auction {
   id: string;
+  authority: string;
   tokenName: string;
   tokenMint: string;
   totalSupply: bigint;
@@ -15,14 +16,17 @@ export interface Auction {
   endTime: number;
   bidCount: number;
   status: AuctionStatus;
+  isSettled: boolean;
   clearingPrice?: bigint;
   winnerCount?: number;
   totalRaised?: bigint;
+  winners?: string[];
 }
 
 const mockAuctions: Auction[] = [
   {
     id: "atlas-001",
+    authority: "11111111111111111111111111111111",
     tokenName: "ATLAS",
     tokenMint: "8f9Q6k3dEzg3o2h4L9C4SYh8nvbnW5WnH2f9A1wP3tDd",
     totalSupply: 1_000_000n,
@@ -30,9 +34,11 @@ const mockAuctions: Auction[] = [
     endTime: Date.now() + 1000 * 60 * 60 * 5,
     bidCount: 14,
     status: "LIVE",
+    isSettled: false,
   },
   {
     id: "helios-002",
+    authority: "11111111111111111111111111111111",
     tokenName: "HELIOS",
     tokenMint: "6T8w6D8hJ2b4nD8Tk9xw9H3v8B9vQ4L8x9wA3s4s1Q9t",
     totalSupply: 750_000n,
@@ -40,9 +46,11 @@ const mockAuctions: Auction[] = [
     endTime: Date.now() - 1000 * 60 * 20,
     bidCount: 39,
     status: "CLOSED",
+    isSettled: false,
   },
   {
     id: "mnemos-003",
+    authority: "11111111111111111111111111111111",
     tokenName: "MNEMOS",
     tokenMint: "2Nf7yNmK9a1v8Y7bJ5u2R6q4z1H8W2r4k9J3t5s1A0zB",
     totalSupply: 500_000n,
@@ -50,6 +58,7 @@ const mockAuctions: Auction[] = [
     endTime: Date.now() - 1000 * 60 * 60 * 9,
     bidCount: 51,
     status: "SETTLED",
+    isSettled: true,
     clearingPrice: 740_000_000n,
     winnerCount: 12,
     totalRaised: 370_000_000_000n,
@@ -93,7 +102,8 @@ export const useAuctionStore = create<AuctionStore>((set, get) => ({
         offset += 1; // vault_authority_bump
         const auctionId = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
         offset += 32;
-        offset += 32; // authority
+        const authority = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
+        offset += 32;
         const tokenMint = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
         offset += 32;
         offset += 32; // token_vault
@@ -113,9 +123,20 @@ export const useAuctionStore = create<AuctionStore>((set, get) => ({
         const bidCount = Number(readU64(data, offset));
         const endTime = endTs * 1000;
         const status: AuctionStatus = isSettled ? "SETTLED" : endTime > Date.now() ? "LIVE" : "CLOSED";
+        const winners: string[] = [];
+        if (offset + 4 <= data.length) {
+          const vecLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(offset, true);
+          offset += 4;
+          for (let i = 0; i < vecLen; i += 1) {
+            if (offset + 32 > data.length) break;
+            winners.push(new PublicKey(data.subarray(offset, offset + 32)).toBase58());
+            offset += 32;
+          }
+        }
 
         next.push({
           id: auctionId,
+          authority,
           tokenName: `TOKEN-${tokenMint.slice(0, 4)}`,
           tokenMint,
           totalSupply,
@@ -123,9 +144,11 @@ export const useAuctionStore = create<AuctionStore>((set, get) => ({
           endTime,
           bidCount,
           status,
+          isSettled,
           clearingPrice,
           winnerCount,
           totalRaised: isSettled ? clearingPrice * BigInt(winnerCount) : 0n,
+          winners,
         });
       }
 

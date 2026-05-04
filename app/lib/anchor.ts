@@ -86,6 +86,19 @@ const IDL: Idl = {
       ],
       args: [],
     },
+    {
+      name: "settleAuction",
+      discriminator: [246, 196, 183, 98, 222, 139, 46, 133],
+      accounts: [
+        { name: "authority", writable: true, signer: true },
+        { name: "auctionState", writable: true, signer: false },
+        { name: "arciumResultAccount", writable: false, signer: false },
+      ],
+      args: [
+        { name: "clearingPrice", type: "u64" },
+        { name: "winnerList", type: { vec: "pubkey" } },
+      ],
+    },
   ],
   accounts: [
     {
@@ -344,6 +357,46 @@ export async function claimTokensTx(params: { wallet: AnchorWallet; auction: Pub
       vaultAuthority,
       bidderTokenAccount,
       tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+}
+
+export async function fetchBidReceiptsForAuction(params: {
+  wallet: AnchorWallet;
+  auction: PublicKey;
+}): Promise<Array<{ bidder: PublicKey; encryptedBidPayload: Uint8Array }>> {
+  const program = getProgram(params.wallet) as any;
+  const receipts = await program.account.bidReceipt.all([
+    {
+      memcmp: {
+        offset: 8,
+        bytes: params.auction.toBase58(),
+      },
+    },
+  ]);
+  return receipts.map((r: any) => ({
+    bidder: r.account.bidder as PublicKey,
+    encryptedBidPayload: new Uint8Array(r.account.encryptedBidPayload as number[]),
+  }));
+}
+
+export async function settleAuctionTx(params: {
+  wallet: AnchorWallet;
+  auction: PublicKey;
+  clearingPrice: bigint;
+  winners: PublicKey[];
+  arciumResultAccount: PublicKey;
+}): Promise<string> {
+  const program = getProgram(params.wallet) as any;
+  return program.methods
+    .settleAuction(
+      new anchor.BN(params.clearingPrice.toString()),
+      params.winners,
+    )
+    .accounts({
+      authority: params.wallet.publicKey,
+      auctionState: params.auction,
+      arciumResultAccount: params.arciumResultAccount,
     })
     .rpc();
 }
