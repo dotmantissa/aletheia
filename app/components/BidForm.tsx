@@ -8,14 +8,17 @@ import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/components/ToastProvider";
 import CopyableText from "@/components/CopyableText";
 import { truncateAddress } from "@/lib/format";
+import { getArciumClient, initArcium } from "@/lib/arcium";
 
 interface BidFormProps {
   auctionId: string;
   arciumPublicKey: string;
+  arciumReady: boolean;
+  arciumLoading: boolean;
   locked: boolean;
 }
 
-export default function BidForm({ auctionId, arciumPublicKey, locked }: BidFormProps) {
+export default function BidForm({ auctionId, arciumPublicKey, arciumReady, arciumLoading, locked }: BidFormProps) {
   const { connected, publicKey } = useWallet();
   const { notify } = useToast();
   const [amount, setAmount] = useState("0.50");
@@ -41,7 +44,22 @@ export default function BidForm({ auctionId, arciumPublicKey, locked }: BidFormP
 
   async function sealBid() {
     try {
-      const encrypted = await encryptBid(Number(amount), Number(quantity), arciumPublicKey);
+      let activeArciumKey = arciumPublicKey;
+      if (!arciumReady || !activeArciumKey) {
+        const ready = await initArcium();
+        if (!ready) {
+          notify("Encryption layer unavailable. Please try again.", "error");
+          return;
+        }
+        const client = await getArciumClient();
+        activeArciumKey = client?.publicKey ?? "";
+      }
+      if (!activeArciumKey) {
+        notify("Encryption layer unavailable. Please try again.", "error");
+        return;
+      }
+
+      const encrypted = await encryptBid(Number(amount), Number(quantity), activeArciumKey);
       await submitEncryptedBid(auctionId, encrypted);
       setSubmitted(true);
       setSealedAt(new Date().toLocaleString());
@@ -103,10 +121,20 @@ export default function BidForm({ auctionId, arciumPublicKey, locked }: BidFormP
 
         <button
           type="submit"
-          disabled={locked || submitted || submitting || !connected}
+          disabled={locked || submitted || submitting || !connected || !arciumReady}
           className="button-gold w-full rounded-[4px] px-4 py-3 text-xs"
         >
-          {!connected ? "Connect wallet to bid" : submitted ? "Bid sealed ✓" : submitting ? "Sealing..." : "Seal Bid →"}
+          {!connected
+            ? "Connect wallet to bid"
+            : submitted
+              ? "Bid sealed ✓"
+              : submitting
+                ? "Sealing..."
+                : arciumReady
+                  ? "Seal Bid →"
+                  : arciumLoading
+                    ? "Preparing encryption..."
+                    : "Preparing encryption..."}
         </button>
       </form>
 

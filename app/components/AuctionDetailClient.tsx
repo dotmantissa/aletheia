@@ -27,7 +27,7 @@ export default function AuctionPage() {
 
   const { connected } = useWallet();
   const { notify } = useToast();
-  const { publicKey: arciumPublicKey, loading: arciumLoading, error: arciumError } = useArcium();
+  const { publicKey: arciumPublicKey, ready: arciumReady, loading: arciumLoading } = useArcium();
 
   const hydrateFromChain = useAuctionStore((s) => s.hydrateFromChain);
   const auction = useAuctionStore((s) => s.byId(id));
@@ -158,15 +158,13 @@ export default function AuctionPage() {
         </section>
 
         <section>
-          {arciumLoading ? (
-            <div className="surface p-6 text-xs text-[#6b6560]">Arcium key attestation is emerging...</div>
-          ) : arciumError ? (
-            <div className="surface p-6 text-xs text-[#7a2a2a]">
-              The hidden channel failed to open. Reattempt from a trusted network.
-            </div>
-          ) : (
-            <BidForm auctionId={id} arciumPublicKey={arciumPublicKey} locked={!isLive || !connected} />
-          )}
+          <BidForm
+            auctionId={id}
+            arciumPublicKey={arciumPublicKey}
+            arciumReady={arciumReady}
+            arciumLoading={arciumLoading}
+            locked={!isLive || !connected}
+          />
         </section>
       </div>
     </main>
