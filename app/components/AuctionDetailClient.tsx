@@ -11,7 +11,7 @@ import CopyableText from "@/components/CopyableText";
 import { useAuctionStore } from "@/hooks/useAuction";
 import { useArcium } from "@/hooks/useArcium";
 import { useToast } from "@/components/ToastProvider";
-import { fetchBidReceiptsForAuction, settleAuctionTx, toAnchorWallet } from "@/lib/anchor";
+import { fetchBidReceiptsForAuction, getProgram, settleAuctionTx, toAnchorWallet } from "@/lib/anchor";
 import { getArciumClient, initArcium, submitComputation } from "@/lib/arcium";
 import { formatLamportsToSol } from "@/lib/format";
 
@@ -114,6 +114,24 @@ export default function AuctionPage() {
         wallet: toAnchorWallet(wallet),
         auction: auctionPubkey,
       });
+      const program = getProgram(toAnchorWallet(wallet)) as any;
+      const bidAccounts = receipts;
+      console.log("=== SETTLEMENT DEBUG ===");
+      console.log("Auction PDA:", auctionPubkey.toBase58());
+      console.log("Bid fetch result count:", bidAccounts.length);
+      console.log("auction_state.bid_count:", auction.bidCount);
+      console.log("Available program accounts:", Object.keys(program.account));
+
+      const allBidReceipts = await program.account.bidReceipt.all();
+      console.log("ALL BidReceipt accounts (unfiltered):", allBidReceipts.length);
+      console.log(
+        "First few:",
+        allBidReceipts.slice(0, 3).map((b: any) => ({
+          pubkey: b.publicKey.toBase58(),
+          auction: b.account.auction?.toBase58(),
+          bidder: b.account.bidder?.toBase58(),
+        })),
+      );
       setSettleBidCount(receipts.length);
       if (receipts.length === 0) {
         setSettlementState("failed");
