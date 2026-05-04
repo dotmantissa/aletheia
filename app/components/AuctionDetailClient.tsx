@@ -145,11 +145,14 @@ export default function AuctionPage() {
       });
 
       setSettlementState("finalizing");
+      const computedClearingPrice = BigInt(result.clearingPrice);
+      const normalizedClearingPrice =
+        computedClearingPrice < auction.minBidFloor ? auction.minBidFloor : computedClearingPrice;
       const resultAccount = result.arciumResultAccount ?? "11111111111111111111111111111111";
       await settleAuctionTx({
         wallet: toAnchorWallet(wallet),
         auction: auctionPubkey,
-        clearingPrice: BigInt(result.clearingPrice),
+        clearingPrice: normalizedClearingPrice,
         winners: result.winners.map((w) => new PublicKey(w)),
         arciumResultAccount: new PublicKey(resultAccount),
       });
