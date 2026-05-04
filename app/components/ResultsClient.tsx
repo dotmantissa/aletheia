@@ -22,10 +22,16 @@ export default function ResultsPage() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [bidStatus, setBidStatus] = useState<{ exists: boolean; isWinner: boolean; claimed: boolean }>({
+  const [bidStatus, setBidStatus] = useState<{
+    exists: boolean;
+    isWinner: boolean;
+    claimed: boolean;
+    collateralLamports: bigint;
+  }>({
     exists: false,
     isWinner: false,
     claimed: false,
+    collateralLamports: 0n,
   });
 
   useEffect(() => {
@@ -45,7 +51,7 @@ export default function ResultsPage() {
   useEffect(() => {
     async function hydrateBidStatus() {
       if (!connected || !publicKey || !auction) {
-        setBidStatus({ exists: false, isWinner: false, claimed: false });
+        setBidStatus({ exists: false, isWinner: false, claimed: false, collateralLamports: 0n });
         return;
       }
       const status = await fetchBidReceiptStatus({
@@ -84,9 +90,11 @@ export default function ResultsPage() {
   const winnerSet = new Set(auction.winners ?? []);
   const isWinner = connected && publicKey ? winnerSet.has(publicKey.toBase58()) : false;
   const hasBid = connected && bidStatus.exists;
-  const isLoser = Boolean(hasBid && !isWinner);
-  const canClaimTokens = Boolean(hasBid && isWinner && !bidStatus.claimed);
-  const canClaimRefund = Boolean(hasBid && !isWinner && !bidStatus.claimed);
+  const allocation = auction.winnerCount && auction.winnerCount > 0 ? auction.totalSupply / BigInt(auction.winnerCount) : 0n;
+  const claimCostLamports = (auction.clearingPrice ?? 0n) * allocation;
+  const undercollateralizedWinner = Boolean(isWinner && hasBid && bidStatus.collateralLamports < claimCostLamports);
+  const canClaimTokens = Boolean(hasBid && isWinner && !undercollateralizedWinner && !bidStatus.claimed);
+  const canClaimRefund = Boolean(hasBid && (!isWinner || undercollateralizedWinner) && !bidStatus.claimed);
 
   async function handleClaim() {
     setLoading(true);
@@ -132,6 +140,8 @@ export default function ResultsPage() {
         >
           {!hasBid
             ? "You did not place a bid in this auction."
+            : undercollateralizedWinner
+            ? "Your winning bid is undercollateralized at the clearing cost. Reclaim your collateral below."
             : isWinner
             ? `You are among the ${winners} winners. Claim your tokens below.`
             : "Your bid did not clear. Your collateral is ready to reclaim."}

@@ -420,7 +420,7 @@ export async function fetchBidReceiptStatus(params: {
   wallet: AnchorWallet;
   auction: PublicKey;
   bidder: PublicKey;
-}): Promise<{ exists: boolean; isWinner: boolean; claimed: boolean }> {
+}): Promise<{ exists: boolean; isWinner: boolean; claimed: boolean; collateralLamports: bigint }> {
   const program = getProgram(params.wallet) as any;
   const [bidReceipt] = deriveBidReceiptPda(params.auction, params.bidder);
   try {
@@ -429,8 +429,9 @@ export async function fetchBidReceiptStatus(params: {
       exists: true,
       isWinner: Boolean(receipt.isWinner),
       claimed: Boolean(receipt.claimed),
+      collateralLamports: BigInt(receipt.collateralLamports.toString()),
     };
   } catch {
-    return { exists: false, isWinner: false, claimed: false };
+    return { exists: false, isWinner: false, claimed: false, collateralLamports: 0n };
   }
 }
