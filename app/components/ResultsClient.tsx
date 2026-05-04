@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import ResultsReveal from "@/components/ResultsReveal";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useAuctionStore } from "@/hooks/useAuction";
 import { useToast } from "@/components/ToastProvider";
-import { claimRefundTx, claimTokensTx, getConnection, toAnchorWallet } from "@/lib/anchor";
+import { claimRefundTx, claimTokensTx, toAnchorWallet } from "@/lib/anchor";
 
 export default function ResultsPage() {
+  const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const wallet = useWallet();
   const { connected, publicKey } = wallet;
@@ -21,7 +22,6 @@ export default function ResultsPage() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [winnerMap, setWinnerMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setMounted(true);
@@ -32,28 +32,10 @@ export default function ResultsPage() {
   }, [hydrateFromChain]);
 
   useEffect(() => {
-    async function hydrateWinners() {
-      try {
-        const account = await getConnection().getAccountInfo(new PublicKey(id));
-        if (!account || account.data.length < 64) return;
-        const data = account.data.subarray(8);
-        let offset = 0;
-        offset += 1 + 1 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 8 + 8 + 8;
-        const vecLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(offset, true);
-        offset += 4;
-        const next: Record<string, boolean> = {};
-        for (let i = 0; i < vecLen; i += 1) {
-          const winner = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
-          next[winner] = true;
-          offset += 32;
-        }
-        setWinnerMap(next);
-      } catch {
-        setWinnerMap({});
-      }
+    if (mounted && auction && !auction.isSettled) {
+      router.replace(`/auction/${id}`);
     }
-    hydrateWinners();
-  }, [id, auction?.winnerCount]);
+  }, [mounted, auction, id, router]);
 
   if (!mounted) {
     return (
@@ -63,7 +45,7 @@ export default function ResultsPage() {
     );
   }
 
-  if (!auction || auction.status !== "SETTLED") {
+  if (!auction || !auction.isSettled) {
     return (
       <main className="page-shell pb-12 sm:pb-16">
         <section className="surface p-8 text-center">
@@ -78,8 +60,9 @@ export default function ResultsPage() {
   const winners = auction.winnerCount ?? 0;
   const totalRaised = Number(auction.totalRaised ?? 0n) / 1_000_000_000;
 
-  const isWinner = connected && publicKey ? Boolean(winnerMap[publicKey.toBase58()]) : false;
-  const isLoser = connected && !isWinner;
+  const winnerMap = new Set(auction.winners ?? []);
+  const isWinner = connected && publicKey ? winnerMap.has(publicKey.toBase58()) : false;
+  const isLoser = connected && publicKey ? !isWinner && winnerMap.size > 0 : false;
 
   async function handleClaim() {
     setLoading(true);
