@@ -121,6 +121,7 @@ export const useAuctionStore = create<AuctionStore>((set, get) => ({
         const winnerCount = Number(readU64(data, offset));
         offset += 8;
         const bidCount = Number(readU64(data, offset));
+        offset += 8;
         const endTime = endTs * 1000;
         const status: AuctionStatus = isSettled ? "SETTLED" : endTime > Date.now() ? "LIVE" : "CLOSED";
         const winners: string[] = [];
