@@ -70,24 +70,24 @@ pub mod aletheia {
         Ok(())
     }
 
-    pub fn submit_bid(ctx: Context<SubmitBid>, encrypted_bid_payload: Vec<u8>) -> Result<()> {
+    pub fn submit_bid(
+        ctx: Context<SubmitBid>,
+        encrypted_bid_payload: Vec<u8>,
+        collateral_lamports: u64,
+    ) -> Result<()> {
         require!(encrypted_bid_payload.len() <= 1024, AuctionError::BidPayloadTooLarge);
+        require!(collateral_lamports > 0, AuctionError::InvalidCollateral);
 
         let now = Clock::get()?.unix_timestamp;
         let auction = &mut ctx.accounts.auction_state;
         require!(now < auction.end_time, AuctionError::AuctionClosed);
         require!(!auction.is_settled, AuctionError::AuctionAlreadySettled);
 
-        let collateral = auction
-            .min_bid_floor
-            .checked_mul(auction.total_supply)
-            .ok_or(AuctionError::MathOverflow)?;
-
         invoke(
             &system_instruction::transfer(
                 &ctx.accounts.bidder.key(),
                 &auction.key(),
-                collateral,
+                collateral_lamports,
             ),
             &[
                 ctx.accounts.bidder.to_account_info(),
@@ -101,7 +101,7 @@ pub mod aletheia {
         bid_receipt.auction = auction.key();
         bid_receipt.bidder = ctx.accounts.bidder.key();
         bid_receipt.encrypted_bid_payload = encrypted_bid_payload;
-        bid_receipt.collateral_lamports = collateral;
+        bid_receipt.collateral_lamports = collateral_lamports;
         bid_receipt.is_winner = false;
         bid_receipt.claimed = false;
 
@@ -114,7 +114,7 @@ pub mod aletheia {
             auction_id: auction.key(),
             bidder: ctx.accounts.bidder.key(),
             bid_receipt: bid_receipt.key(),
-            collateral_lamports: collateral,
+            collateral_lamports,
         });
 
         Ok(())
@@ -483,6 +483,8 @@ pub enum AuctionError {
     Unauthorized,
     #[msg("Bid payload exceeds max size")]
     BidPayloadTooLarge,
+    #[msg("Invalid collateral amount")]
+    InvalidCollateral,
     #[msg("Invalid clearing price")]
     InvalidClearingPrice,
     #[msg("Arcium verifier owner mismatch")]

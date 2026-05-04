@@ -60,7 +60,8 @@ export default function BidForm({ auctionId, arciumPublicKey, arciumReady, arciu
       }
 
       const encrypted = await encryptBid(Number(amount), Number(quantity), activeArciumKey);
-      await submitEncryptedBid(auctionId, encrypted);
+      const collateralLamports = BigInt(Math.round(Number(collateral) * 1_000_000_000));
+      await submitEncryptedBid(auctionId, encrypted, collateralLamports);
       setSubmitted(true);
       setSealedAt(new Date().toLocaleString());
       notify("Your bid is locked inside Arcium. It cannot be seen or changed.", "success");

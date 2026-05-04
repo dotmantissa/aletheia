@@ -12,7 +12,11 @@ export function useBid() {
   const [receiptHash, setReceiptHash] = useState<string>("");
   const [error, setError] = useState<string>("");
 
-  async function submitEncryptedBid(auctionId: string, encryptedPayload: Uint8Array): Promise<string> {
+  async function submitEncryptedBid(
+    auctionId: string,
+    encryptedPayload: Uint8Array,
+    collateralLamports: bigint,
+  ): Promise<string> {
     try {
       setSubmitting(true);
       setError("");
@@ -23,6 +27,7 @@ export function useBid() {
         wallet: toAnchorWallet(wallet),
         auction: new PublicKey(auctionId),
         encryptedBidPayload: encryptedPayload,
+        collateralLamports,
       });
       const hash = await payloadHash(encryptedPayload);
       setReceiptHash(hash);

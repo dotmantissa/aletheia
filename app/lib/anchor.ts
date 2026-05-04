@@ -57,7 +57,10 @@ const IDL: Idl = {
         { name: "bidReceipt", writable: true, signer: false },
         { name: "systemProgram", writable: false, signer: false },
       ],
-      args: [{ name: "encryptedBidPayload", type: { vec: "u8" } }],
+      args: [
+        { name: "encryptedBidPayload", type: { vec: "u8" } },
+        { name: "collateralLamports", type: "u64" },
+      ],
     },
     {
       name: "claimTokens",
@@ -279,13 +282,17 @@ export async function submitBidTx(params: {
   wallet: AnchorWallet;
   auction: PublicKey;
   encryptedBidPayload: Uint8Array;
+  collateralLamports: bigint;
 }): Promise<{ signature: string; bidReceipt: PublicKey }> {
   const program = getProgram(params.wallet) as AletheiaProgram;
   const bidder = params.wallet.publicKey;
   const [bidReceipt] = deriveBidReceiptPda(params.auction, bidder);
 
   const signature = await program.methods
-    .submitBid(Array.from(params.encryptedBidPayload))
+    .submitBid(
+      Array.from(params.encryptedBidPayload),
+      new anchor.BN(params.collateralLamports.toString()),
+    )
     .accounts({
       bidder,
       auctionState: params.auction,
