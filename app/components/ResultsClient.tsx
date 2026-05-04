@@ -81,19 +81,25 @@ export default function ResultsPage() {
   const winners = auction.winnerCount ?? 0;
   const totalRaised = Number(auction.totalRaised ?? 0n) / 1_000_000_000;
 
-  const isWinner = connected && bidStatus.exists && bidStatus.isWinner;
-  const isLoser = connected && bidStatus.exists && !bidStatus.isWinner;
+  const winnerSet = new Set(auction.winners ?? []);
+  const isWinner = connected && publicKey ? winnerSet.has(publicKey.toBase58()) : false;
+  const hasBid = connected && bidStatus.exists;
+  const isLoser = Boolean(hasBid && !isWinner);
+  const canClaimTokens = Boolean(hasBid && isWinner && !bidStatus.claimed);
+  const canClaimRefund = Boolean(hasBid && !isWinner && !bidStatus.claimed);
 
   async function handleClaim() {
     setLoading(true);
     try {
       if (!connected || !publicKey) throw new Error("Connect wallet to participate");
-      if (isWinner) {
+      if (canClaimTokens) {
         const sig = await claimTokensTx({ wallet: toAnchorWallet(wallet), auction: new PublicKey(id) });
         notify(`Token claim finalized: ${sig.slice(0, 8)}...`, "success");
-      } else {
+      } else if (canClaimRefund) {
         const sig = await claimRefundTx({ wallet: toAnchorWallet(wallet), auction: new PublicKey(id) });
         notify(`Refund finalized: ${sig.slice(0, 8)}...`, "success");
+      } else {
+        throw new Error("No claim path available for this wallet on this auction");
       }
       await hydrateFromChain();
       if (connected && publicKey) {
@@ -124,7 +130,9 @@ export default function ResultsPage() {
               : "border-[#1e1e1e] bg-[#111111] text-[#d5d1cb]"
           }`}
         >
-          {isWinner
+          {!hasBid
+            ? "You did not place a bid in this auction."
+            : isWinner
             ? `You are among the ${winners} winners. Claim your tokens below.`
             : "Your bid did not clear. Your collateral is ready to reclaim."}
         </section>
@@ -135,12 +143,12 @@ export default function ResultsPage() {
       )}
 
       <div className="mt-5 flex flex-wrap gap-3">
-        {isWinner ? (
+        {canClaimTokens ? (
           <button className="button-gold rounded-[4px] px-5 py-3 text-xs" onClick={() => setConfirmOpen(true)}>
             Claim Tokens
           </button>
         ) : null}
-        {isLoser ? (
+        {canClaimRefund ? (
           <button className="button-outline rounded-[4px] px-5 py-3 text-xs" onClick={() => setConfirmOpen(true)}>
             Claim Refund
           </button>
@@ -148,12 +156,12 @@ export default function ResultsPage() {
       </div>
 
       <ConfirmModal
-        title={isWinner ? "Confirm Token Claim" : "Confirm Refund Claim"}
+        title={canClaimTokens ? "Confirm Token Claim" : "Confirm Refund Claim"}
         description="This action writes to chain. Confirm before signing."
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleClaim}
-        confirmLabel={isWinner ? "Claim Tokens" : "Claim Refund"}
+        confirmLabel={canClaimTokens ? "Claim Tokens" : "Claim Refund"}
         loading={loading}
         rows={[
           { label: "Auction", value: auction.tokenName },
