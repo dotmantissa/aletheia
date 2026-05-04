@@ -50,9 +50,15 @@ function readBorshString(data: Buffer, offset: number): { value: string; nextOff
 
 function sanitizeImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  const normalized = url.startsWith("ipfs://")
-    ? `https://gateway.pinata.cloud/ipfs/${url.slice("ipfs://".length)}`
-    : url;
+  let normalized = url.trim();
+  const embedded = normalized.match(/https?:\/\/\S+/i) ?? normalized.match(/https?:\/\S+/i);
+  if (embedded) {
+    normalized = embedded[0];
+  }
+  if (normalized.startsWith("ipfs://")) {
+    normalized = `https://gateway.pinata.cloud/ipfs/${normalized.slice("ipfs://".length)}`;
+  }
+  normalized = normalized.replace(/^https:\/(?!\/)/i, "https://");
   try {
     const parsed = new URL(normalized);
     if (parsed.protocol !== "https:") return null;
