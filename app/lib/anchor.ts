@@ -240,6 +240,10 @@ export async function createAuctionTx(params: {
   const authority = params.wallet.publicKey;
   const [auction] = deriveAuctionPda(authority, params.tokenMint);
   const [vaultAuthority] = deriveVaultAuthorityPda(auction);
+  const existing = await getConnection().getAccountInfo(auction, "confirmed");
+  if (existing) {
+    return { signature: "existing-auction", auction };
+  }
   let lastErr: unknown = null;
 
   for (const endpoint of RPC_FALLBACK_URLS) {
@@ -285,6 +289,16 @@ export async function createAuctionTx(params: {
     } catch (err: any) {
       lastErr = err;
       const message = String(err?.message ?? "");
+      const logs = err?.logs ?? err?.error?.logs ?? [];
+      const allocationConflict =
+        message.includes("already in use") ||
+        (Array.isArray(logs) && logs.some((l: string) => l.includes("already in use")));
+      if (allocationConflict) {
+        const nowExists = await program.provider.connection.getAccountInfo(auction, "confirmed");
+        if (nowExists) {
+          return { signature: "existing-auction", auction };
+        }
+      }
       const retryableNetworkIssue =
         message.includes("failed to get recent blockhash") ||
         message.includes("TypeError: Failed to fetch") ||
@@ -292,7 +306,6 @@ export async function createAuctionTx(params: {
         message.includes("429") ||
         message.includes("timed out");
       if (!retryableNetworkIssue) {
-        const logs = err?.logs ?? err?.error?.logs ?? [];
         console.error("create_auction failed:", { endpoint, message, logs, err });
         throw new Error(`${message}${Array.isArray(logs) && logs.length ? ` | logs: ${logs.join(" || ")}` : ""}`);
       }
