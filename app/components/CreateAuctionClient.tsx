@@ -383,7 +383,8 @@ export default function CreateAuctionPage() {
       await hydrateFromChain();
       notify("Auction created. Truth surfaces at close.", "success");
       router.push(`/auction/${result.auction.toBase58()}?created=1`);
-    } catch {
+    } catch (error) {
+      console.error("sealAuction failed:", error);
       notify("The seal failed to set. Verify parameters and retry.", "error");
     } finally {
       setLoading(false);

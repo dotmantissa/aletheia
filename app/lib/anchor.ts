@@ -248,7 +248,7 @@ export async function createAuctionTx(params: {
     tx.recentBlockhash = latest.blockhash;
     tx.partialSign(tokenVault);
     const signed = await params.wallet.signTransaction(tx);
-    const simulation = await program.provider.connection.simulateTransaction(signed, { sigVerify: false });
+    const simulation = await program.provider.connection.simulateTransaction(signed);
     // Keep these logs in dev only for exact on-chain failure visibility.
     console.log("Simulation logs:", simulation.value.logs);
     if (simulation.value.err) {
@@ -257,7 +257,20 @@ export async function createAuctionTx(params: {
     }
   }
 
-  const signature = await builder.rpc();
+  let signature: string;
+  try {
+    signature = await builder.rpc();
+  } catch (err: any) {
+    const message = err?.message ?? "create_auction rpc failed";
+    const logs = err?.logs ?? err?.error?.logs ?? [];
+    // Keep full diagnostics visible in browser/devtools for production debugging.
+    console.error("create_auction failed:", {
+      message,
+      logs,
+      err,
+    });
+    throw new Error(`${message}${Array.isArray(logs) && logs.length ? ` | logs: ${logs.join(" || ")}` : ""}`);
+  }
 
   return { signature, auction };
 }
