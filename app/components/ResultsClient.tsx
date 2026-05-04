@@ -8,7 +8,7 @@ import ResultsReveal from "@/components/ResultsReveal";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useAuctionStore } from "@/hooks/useAuction";
 import { useToast } from "@/components/ToastProvider";
-import { claimRefundTx, claimTokensTx, toAnchorWallet } from "@/lib/anchor";
+import { claimRefundTx, claimTokensTx, fetchBidReceiptStatus, toAnchorWallet } from "@/lib/anchor";
 
 export default function ResultsPage() {
   const router = useRouter();
@@ -22,6 +22,11 @@ export default function ResultsPage() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [bidStatus, setBidStatus] = useState<{ exists: boolean; isWinner: boolean; claimed: boolean }>({
+    exists: false,
+    isWinner: false,
+    claimed: false,
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -36,6 +41,22 @@ export default function ResultsPage() {
       router.replace(`/auction/${id}`);
     }
   }, [mounted, auction, id, router]);
+
+  useEffect(() => {
+    async function hydrateBidStatus() {
+      if (!connected || !publicKey || !auction) {
+        setBidStatus({ exists: false, isWinner: false, claimed: false });
+        return;
+      }
+      const status = await fetchBidReceiptStatus({
+        wallet: toAnchorWallet(wallet),
+        auction: new PublicKey(id),
+        bidder: publicKey,
+      });
+      setBidStatus(status);
+    }
+    hydrateBidStatus();
+  }, [connected, publicKey, auction, id, wallet]);
 
   if (!mounted) {
     return (
@@ -60,9 +81,8 @@ export default function ResultsPage() {
   const winners = auction.winnerCount ?? 0;
   const totalRaised = Number(auction.totalRaised ?? 0n) / 1_000_000_000;
 
-  const winnerMap = new Set(auction.winners ?? []);
-  const isWinner = connected && publicKey ? winnerMap.has(publicKey.toBase58()) : false;
-  const isLoser = connected && publicKey ? !isWinner && winnerMap.size > 0 : false;
+  const isWinner = connected && bidStatus.exists && bidStatus.isWinner;
+  const isLoser = connected && bidStatus.exists && !bidStatus.isWinner;
 
   async function handleClaim() {
     setLoading(true);
@@ -76,6 +96,14 @@ export default function ResultsPage() {
         notify(`Refund finalized: ${sig.slice(0, 8)}...`, "success");
       }
       await hydrateFromChain();
+      if (connected && publicKey) {
+        const status = await fetchBidReceiptStatus({
+          wallet: toAnchorWallet(wallet),
+          auction: new PublicKey(id),
+          bidder: publicKey,
+        });
+        setBidStatus(status);
+      }
     } catch (error) {
       notify(error instanceof Error ? error.message : "Settlement claim failed", "error");
     } finally {

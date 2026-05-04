@@ -415,3 +415,22 @@ export async function settleAuctionTx(params: {
   await program.provider.connection.confirmTransaction(signature, "confirmed");
   return signature;
 }
+
+export async function fetchBidReceiptStatus(params: {
+  wallet: AnchorWallet;
+  auction: PublicKey;
+  bidder: PublicKey;
+}): Promise<{ exists: boolean; isWinner: boolean; claimed: boolean }> {
+  const program = getProgram(params.wallet) as any;
+  const [bidReceipt] = deriveBidReceiptPda(params.auction, params.bidder);
+  try {
+    const receipt = await program.account.bidReceipt.fetch(bidReceipt);
+    return {
+      exists: true,
+      isWinner: Boolean(receipt.isWinner),
+      claimed: Boolean(receipt.claimed),
+    };
+  } catch {
+    return { exists: false, isWinner: false, claimed: false };
+  }
+}
