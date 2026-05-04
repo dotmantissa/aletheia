@@ -148,7 +148,7 @@ export default function AuctionPage() {
       const computedClearingPrice = BigInt(result.clearingPrice);
       const normalizedClearingPrice =
         computedClearingPrice < auction.minBidFloor ? auction.minBidFloor : computedClearingPrice;
-      const resultAccount = result.arciumResultAccount ?? wallet.publicKey.toBase58();
+      const resultAccount = wallet.publicKey.toBase58();
       await settleAuctionTx({
         wallet: toAnchorWallet(wallet),
         auction: auctionPubkey,
