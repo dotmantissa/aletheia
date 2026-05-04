@@ -258,7 +258,18 @@ pub mod aletheia {
         require!(!bid.claimed, AuctionError::AlreadyClaimed);
 
         let is_winner = auction.winners.contains(&ctx.accounts.bidder.key());
-        require!(!is_winner, AuctionError::WinnerCannotClaimRefund);
+        if is_winner {
+            // Edge case safety: allow refund if this winner cannot satisfy clearing cost.
+            let allocation = auction
+                .total_supply
+                .checked_div(auction.winner_count)
+                .ok_or(AuctionError::MathOverflow)?;
+            let cost = auction
+                .clearing_price
+                .checked_mul(allocation)
+                .ok_or(AuctionError::MathOverflow)?;
+            require!(bid.collateral_lamports < cost, AuctionError::WinnerCannotClaimRefund);
+        }
 
         let refund = bid.collateral_lamports;
         **ctx.accounts.auction_state.to_account_info().try_borrow_mut_lamports()? -= refund;
