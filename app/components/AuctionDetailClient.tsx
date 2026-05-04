@@ -11,7 +11,7 @@ import CopyableText from "@/components/CopyableText";
 import { useAuctionStore } from "@/hooks/useAuction";
 import { useArcium } from "@/hooks/useArcium";
 import { useToast } from "@/components/ToastProvider";
-import { fetchBidReceiptsForAuction, getProgram, settleAuctionTx, toAnchorWallet } from "@/lib/anchor";
+import { fetchBidReceiptsForAuction, settleAuctionTx, toAnchorWallet } from "@/lib/anchor";
 import { getArciumClient, initArcium, submitComputation } from "@/lib/arcium";
 import { formatLamportsToSol } from "@/lib/format";
 
@@ -43,7 +43,7 @@ export default function AuctionPage() {
     "idle" | "loading" | "computing" | "finalizing" | "failed" | "success"
   >("idle");
   const [settlementError, setSettlementError] = useState("");
-  const [settleBidCount, setSettleBidCount] = useState<number | null>(null);
+  const [settlementBids, setSettlementBids] = useState<Array<{ bidder: string; payload: Uint8Array }>>([]);
 
   useEffect(() => {
     setMounted(true);
@@ -114,25 +114,9 @@ export default function AuctionPage() {
         wallet: toAnchorWallet(wallet),
         auction: auctionPubkey,
       });
-      const program = getProgram(toAnchorWallet(wallet)) as any;
-      const bidAccounts = receipts;
-      console.log("=== SETTLEMENT DEBUG ===");
-      console.log("Auction PDA:", auctionPubkey.toBase58());
-      console.log("Bid fetch result count:", bidAccounts.length);
-      console.log("auction_state.bid_count:", auction.bidCount);
-      console.log("Available program accounts:", Object.keys(program.account));
-
-      const allBidReceipts = await program.account.bidReceipt.all();
-      console.log("ALL BidReceipt accounts (unfiltered):", allBidReceipts.length);
-      console.log(
-        "First few:",
-        allBidReceipts.slice(0, 3).map((b: any) => ({
-          pubkey: b.publicKey.toBase58(),
-          auction: b.account.auction?.toBase58(),
-          bidder: b.account.bidder?.toBase58(),
-        })),
+      setSettlementBids(
+        receipts.map((r) => ({ bidder: r.bidder.toBase58(), payload: r.encryptedBidPayload })),
       );
-      setSettleBidCount(receipts.length);
       if (receipts.length === 0) {
         setSettlementState("failed");
         setSettlementError("No bids were placed. This auction cannot be settled.");
@@ -149,12 +133,12 @@ export default function AuctionPage() {
       }
 
       setSettlementState("computing");
+      const bidInputs = settlementBids.length > 0
+        ? settlementBids.map((b) => ({ bidder: b.bidder, encryptedPayload: b.payload }))
+        : receipts.map((r) => ({ bidder: r.bidder.toBase58(), encryptedPayload: r.encryptedBidPayload }));
       const result = await submitComputation(client, {
         circuit: "clearing_price",
-        inputs: receipts.map((r) => ({
-          bidder: r.bidder.toBase58(),
-          encryptedPayload: r.encryptedBidPayload,
-        })),
+        inputs: bidInputs,
         params: {
           totalSupply: auction.totalSupply.toString(),
         },
@@ -257,7 +241,7 @@ export default function AuctionPage() {
               <p>This auction has closed.</p>
               <p className="mt-1">You are the authority. Initiate settlement to reveal the truth.</p>
               <p className="mt-3 font-mono text-[#6b6560]">
-                [ {settleBidCount ?? auction.bidCount} bids sealed ] — ready for computation
+                [ {auction.bidCount} bids sealed ] — ready for computation
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button

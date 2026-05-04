@@ -380,7 +380,9 @@ export async function fetchBidReceiptsForAuction(params: {
   const receipts = await program.account.bidReceipt.all([
     {
       memcmp: {
-        offset: 8,
+        // BidReceipt layout: discriminator(8) + bump(1) + auction(32)...
+        // Filter must start at auction field, so offset is 9.
+        offset: 9,
         bytes: params.auction.toBase58(),
       },
     },
