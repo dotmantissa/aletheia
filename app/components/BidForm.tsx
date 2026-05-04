@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { encryptBid } from "@/lib/encryption";
 import { useBid } from "@/hooks/useBid";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -21,13 +21,42 @@ interface BidFormProps {
 export default function BidForm({ auctionId, arciumPublicKey, arciumReady, arciumLoading, locked }: BidFormProps) {
   const { connected, publicKey } = useWallet();
   const { notify } = useToast();
-  const [amount, setAmount] = useState("0.50");
+  const [amountMode, setAmountMode] = useState<"SOL" | "USD">("SOL");
+  const [amountSol, setAmountSol] = useState("0.50");
+  const [amountUsd, setAmountUsd] = useState("100.00");
   const [quantity, setQuantity] = useState("1000");
   const [sealedAt, setSealedAt] = useState<string>("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [solUsd, setSolUsd] = useState<number>(0);
+  const [priceLoading, setPriceLoading] = useState(false);
 
   const { submitting, receiptHash, submitEncryptedBid } = useBid();
+
+  useEffect(() => {
+    async function fetchSolUsd() {
+      setPriceLoading(true);
+      try {
+        const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
+        const data = (await res.json()) as { solana?: { usd?: number } };
+        const price = Number(data?.solana?.usd ?? 0);
+        if (Number.isFinite(price) && price > 0) setSolUsd(price);
+      } catch {
+        // keep zero; UI handles unavailable rate
+      } finally {
+        setPriceLoading(false);
+      }
+    }
+    fetchSolUsd();
+  }, []);
+
+  const amount = useMemo(() => {
+    if (amountMode === "SOL") return amountSol;
+    if (!solUsd || solUsd <= 0) return "0";
+    const usd = Number(amountUsd);
+    if (!Number.isFinite(usd) || usd <= 0) return "0";
+    return (usd / solUsd).toFixed(6);
+  }, [amountMode, amountSol, amountUsd, solUsd]);
 
   const collateral = useMemo(() => {
     const total = Number(amount) * Number(quantity);
@@ -94,14 +123,51 @@ export default function BidForm({ auctionId, arciumPublicKey, arciumReady, arciu
       <p className="mt-1 text-xs text-[#6b6560]">Truth surfaces at close.</p>
 
       <form className="mt-5 space-y-4" onSubmit={openConfirm}>
-        <div>
-          <label className="text-xs text-[#6b6560]">SOL per token</label>
-          <input
-            className="input-dark mt-1 text-sm"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+        <div className="flex gap-2 rounded-[999px] border border-[#1e1e1e] bg-[#0d0d0d] p-1">
+          <button
+            type="button"
+            onClick={() => setAmountMode("SOL")}
+            className={`flex-1 rounded-[999px] px-3 py-2 text-xs transition-soft ${amountMode === "SOL" ? "bg-[#c8892a] text-[#14110a]" : "text-[#6b6560] hover:text-[#f0ede8]"}`}
             disabled={locked || submitted || submitting}
-          />
+          >
+            SOL / token
+          </button>
+          <button
+            type="button"
+            onClick={() => setAmountMode("USD")}
+            className={`flex-1 rounded-[999px] px-3 py-2 text-xs transition-soft ${amountMode === "USD" ? "bg-[#c8892a] text-[#14110a]" : "text-[#6b6560] hover:text-[#f0ede8]"}`}
+            disabled={locked || submitted || submitting}
+          >
+            USD / token
+          </button>
+        </div>
+
+        <div>
+          <label className="text-xs text-[#6b6560]">{amountMode === "SOL" ? "SOL per token" : "USD per token"}</label>
+          {amountMode === "SOL" ? (
+            <input
+              className="input-dark mt-1 text-sm"
+              value={amountSol}
+              onChange={(event) => setAmountSol(event.target.value)}
+              disabled={locked || submitted || submitting}
+            />
+          ) : (
+            <input
+              className="input-dark mt-1 text-sm"
+              value={amountUsd}
+              onChange={(event) => setAmountUsd(event.target.value)}
+              disabled={locked || submitted || submitting}
+            />
+          )}
+          {amountMode === "USD" ? (
+            <p className="mt-1 text-[11px] text-[#6b6560]">
+              {priceLoading
+                ? "Fetching SOL/USD rate..."
+                : solUsd > 0
+                  ? `Rate: 1 SOL = $${solUsd.toFixed(2)} · Converted: ${amount} SOL/token`
+                  : "SOL/USD rate unavailable; conversion paused."}
+            </p>
+          ) : null}
         </div>
 
         <div>
@@ -160,6 +226,7 @@ export default function BidForm({ auctionId, arciumPublicKey, arciumReady, arciu
         rows={[
           { label: "Bidder", value: publicKey ? truncateAddress(publicKey.toBase58(), 8, 6) : "Unknown" },
           { label: "SOL per token", value: amount },
+          ...(amountMode === "USD" ? [{ label: "USD per token", value: amountUsd }] : []),
           { label: "Quantity", value: quantity },
           { label: "Collateral", value: `${collateral} SOL` },
         ]}
