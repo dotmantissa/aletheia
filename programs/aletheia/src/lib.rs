@@ -144,6 +144,10 @@ pub mod aletheia {
         require!(parsed.auction == auction.key(), AuctionError::ArciumAuctionMismatch);
         require!(parsed.clearing_price == clearing_price, AuctionError::ArciumClearingPriceMismatch);
         require!(parsed.winners == winner_list, AuctionError::ArciumWinnerListMismatch);
+        require!(
+            winner_list.len() <= AuctionState::MAX_WINNERS,
+            AuctionError::WinnerListTooLarge
+        );
 
         let winner_count = winner_list.len() as u64;
         require!(winner_count > 0, AuctionError::NoWinners);
@@ -381,7 +385,8 @@ pub struct AuctionState {
 }
 
 impl AuctionState {
-    pub const MAX_WINNERS: usize = 2048;
+    // Keep account allocation under Solana inner realloc CPI limits.
+    pub const MAX_WINNERS: usize = 256;
     pub const MAX_SIZE: usize =
         1 + 1 + // bumps
         32 * 4 + // pubkeys
@@ -510,4 +515,6 @@ pub enum AuctionError {
     InvalidAuthorityTokenAccount,
     #[msg("Invalid bidder token account")]
     InvalidBidderTokenAccount,
+    #[msg("Winner list exceeds supported maximum")]
+    WinnerListTooLarge,
 }
