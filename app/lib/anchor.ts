@@ -10,7 +10,7 @@ import {
   SYSVAR_RENT_PUBKEY,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { PROGRAM_ID, RPC_URL } from "./constants";
+import { PROGRAM_ID, RPC_FALLBACK_URLS, RPC_URL } from "./constants";
 
 export const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -168,6 +168,11 @@ export function getProgram(wallet: anchor.Wallet): Program {
   return new Program(IDL, provider);
 }
 
+function getProgramForEndpoint(wallet: anchor.Wallet, endpoint: string): Program {
+  const provider = new anchor.AnchorProvider(new Connection(endpoint, "confirmed"), wallet, { commitment: "confirmed" });
+  return new Program(IDL, provider);
+}
+
 export function toAnchorWallet(wallet: any): AnchorWallet {
   if (!wallet?.publicKey || !wallet?.signTransaction || !wallet?.signAllTransactions) {
     throw new Error("Wallet does not support signing");
@@ -232,63 +237,69 @@ export async function createAuctionTx(params: {
   minBidFloorLamports: bigint;
   durationSeconds: number;
 }): Promise<{ signature: string; auction: PublicKey }> {
-  const program = getProgram(params.wallet) as AletheiaProgram;
   const authority = params.wallet.publicKey;
   const [auction] = deriveAuctionPda(authority, params.tokenMint);
   const [vaultAuthority] = deriveVaultAuthorityPda(auction);
-  const tokenVault = Keypair.generate();
+  let lastErr: unknown = null;
 
-  const builder = program.methods
-    .createAuction(
-      new anchor.BN(params.totalSupply.toString()),
-      new anchor.BN(params.minBidFloorLamports.toString()),
-      new anchor.BN(params.durationSeconds),
-    )
-    .accounts({
-      authority,
-      auctionState: auction,
-      tokenMint: params.tokenMint,
-      tokenVault: tokenVault.publicKey,
-      vaultAuthority,
-      authorityTokenAccount: params.authorityTokenAccount,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-      rent: SYSVAR_RENT_PUBKEY,
-    })
-    .signers([tokenVault]);
+  for (const endpoint of RPC_FALLBACK_URLS) {
+    const program = getProgramForEndpoint(params.wallet, endpoint) as AletheiaProgram;
+    const tokenVault = Keypair.generate();
+    const builder = program.methods
+      .createAuction(
+        new anchor.BN(params.totalSupply.toString()),
+        new anchor.BN(params.minBidFloorLamports.toString()),
+        new anchor.BN(params.durationSeconds),
+      )
+      .accounts({
+        authority,
+        auctionState: auction,
+        tokenMint: params.tokenMint,
+        tokenVault: tokenVault.publicKey,
+        vaultAuthority,
+        authorityTokenAccount: params.authorityTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([tokenVault]);
 
-  if (process.env.NODE_ENV === "development") {
-    const tx = await builder.transaction();
-    tx.feePayer = authority;
-    const latest = await program.provider.connection.getLatestBlockhash("confirmed");
-    tx.recentBlockhash = latest.blockhash;
-    tx.partialSign(tokenVault);
-    const signed = await params.wallet.signTransaction(tx);
-    const simulation = await program.provider.connection.simulateTransaction(signed);
-    // Keep these logs in dev only for exact on-chain failure visibility.
-    console.log("Simulation logs:", simulation.value.logs);
-    if (simulation.value.err) {
-      console.error("Simulation error:", simulation.value.err);
-      throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
+    if (process.env.NODE_ENV === "development") {
+      const tx = await builder.transaction();
+      tx.feePayer = authority;
+      const latest = await program.provider.connection.getLatestBlockhash("confirmed");
+      tx.recentBlockhash = latest.blockhash;
+      tx.partialSign(tokenVault);
+      const signed = await params.wallet.signTransaction(tx);
+      const simulation = await program.provider.connection.simulateTransaction(signed);
+      console.log("Simulation logs:", simulation.value.logs);
+      if (simulation.value.err) {
+        console.error("Simulation error:", simulation.value.err);
+        throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      }
+    }
+
+    try {
+      const signature = await builder.rpc();
+      return { signature, auction };
+    } catch (err: any) {
+      lastErr = err;
+      const message = String(err?.message ?? "");
+      const retryableNetworkIssue =
+        message.includes("failed to get recent blockhash") ||
+        message.includes("TypeError: Failed to fetch") ||
+        message.includes("fetch failed") ||
+        message.includes("429") ||
+        message.includes("timed out");
+      if (!retryableNetworkIssue) {
+        const logs = err?.logs ?? err?.error?.logs ?? [];
+        console.error("create_auction failed:", { endpoint, message, logs, err });
+        throw new Error(`${message}${Array.isArray(logs) && logs.length ? ` | logs: ${logs.join(" || ")}` : ""}`);
+      }
+      console.warn(`RPC endpoint failed (${endpoint}), retrying next endpoint...`);
     }
   }
-
-  let signature: string;
-  try {
-    signature = await builder.rpc();
-  } catch (err: any) {
-    const message = err?.message ?? "create_auction rpc failed";
-    const logs = err?.logs ?? err?.error?.logs ?? [];
-    // Keep full diagnostics visible in browser/devtools for production debugging.
-    console.error("create_auction failed:", {
-      message,
-      logs,
-      err,
-    });
-    throw new Error(`${message}${Array.isArray(logs) && logs.length ? ` | logs: ${logs.join(" || ")}` : ""}`);
-  }
-
-  return { signature, auction };
+  throw lastErr instanceof Error ? lastErr : new Error("create_auction rpc failed after trying fallback RPC endpoints");
 }
 
 export async function submitBidTx(params: {
