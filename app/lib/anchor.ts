@@ -388,7 +388,7 @@ export async function settleAuctionTx(params: {
   arciumResultAccount: PublicKey;
 }): Promise<string> {
   const program = getProgram(params.wallet) as any;
-  return program.methods
+  const signature = await program.methods
     .settleAuction(
       new anchor.BN(params.clearingPrice.toString()),
       params.winners,
@@ -399,4 +399,6 @@ export async function settleAuctionTx(params: {
       arciumResultAccount: params.arciumResultAccount,
     })
     .rpc();
+  await program.provider.connection.confirmTransaction(signature, "confirmed");
+  return signature;
 }
