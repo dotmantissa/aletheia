@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { RPC_URL } from "@/lib/constants";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -14,7 +13,7 @@ const WalletProviderCompat = WalletProvider as unknown as React.ComponentType<an
 const WalletModalProviderCompat = WalletModalProvider as unknown as React.ComponentType<any>;
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
+  const wallets = useMemo(() => [new SolflareWalletAdapter()], []);
 
   return (
     <ConnectionProviderCompat endpoint={RPC_URL}>

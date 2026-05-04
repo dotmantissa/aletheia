@@ -1,11 +1,29 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { truncateAddress } from "@/lib/format";
 
 export default function WalletButton() {
   const { connected, publicKey } = useWallet();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        className="!rounded-[4px] !border !border-[#c8892a] !bg-[#c8892a] !px-3 !py-2 !font-mono !text-xs !font-medium !text-[#14110a] opacity-80"
+        disabled
+      >
+        Initializing...
+      </button>
+    );
+  }
 
   return (
     <WalletMultiButton
